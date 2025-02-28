@@ -1,0 +1,2 @@
+Test README, to be filled properly later
+This repo is dedicated to a sports analytics project involving the creation of a network to visualize and analyze the impacts of social ties and philosophical influence on outcomes in coaching
