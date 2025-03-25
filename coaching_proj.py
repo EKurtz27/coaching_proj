@@ -28,4 +28,7 @@ for i, item in enumerate(team_sites):
         team_sites[i] = ("Ohio Bobcats", "Ohio Bobcats football")
     if item[0] == "Washington":
         team_sites[i] = ("Washington Huskies", "Washington Huskies football")
-pprint.pprint(team_sites)
+#pprint.pprint(team_sites)
+
+df = pd.DataFrame(team_sites, columns=['School', 'Wiki Page'])
+df.to_csv('team_sites.csv', index=False)
