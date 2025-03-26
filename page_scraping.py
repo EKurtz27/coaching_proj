@@ -2,10 +2,11 @@ import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+import json
 
-team_sites = pd.read_json('team_sites.json')
-team_sites = team_sites.to_dict()
-print(team_sites['Air Force']['Air Force Falcons football'])
+with open('team_sites.json', 'r') as my_file:
+    team_sites = json.load(my_file)
 
+print(team_sites['Air Force'])
 #def get_team_page(team, database):
     
