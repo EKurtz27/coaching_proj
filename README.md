@@ -1,2 +1,3 @@
-Test README, to be filled properly later
-This repo is dedicated to a sports analytics project involving the creation of a network to visualize and analyze the impacts of social ties and philosophical influence on outcomes in coaching
+This repo is dedicated to a sports analytics project involving the creation of a network to visualize and analyze the impacts of social ties and philosophical influence on outcomes in coaching.
+
+File wiki_page_file_creation.py creates the initial database of Wikipedia page titles for all NCAA D1 football programs, this file is stored in the repository already as team_sites.csv. Code is included for transparency and to allow for branching inquiry.
