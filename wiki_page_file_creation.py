@@ -1,8 +1,9 @@
-from bs4 import BeautifulSoup
-import requests
+# Basic script to scrape the Wikipedia pages for NCAA Division I FBS football programs
+# Includes manual correction of certain pages
+# Exports to team_sites.csv, already uploaded to the respository. This code is provided for transparency
 import wikipedia as wp
 import pandas as pd
-import pprint
+
 
 # Fetch the Wikipedia page content
 page = wp.page("List of NCAA Division I FBS football programs")
@@ -14,7 +15,7 @@ for school in schools:
     search_result = wp.search(school + " football", results=1)
     team_tuple = (school, search_result[0])
     team_sites.append(team_tuple)
-#pprint.pprint(team_sites)
+
 #misidentified schools: Charlotte: Charlotte FC, Houston: Houston Texans, Miami(FL): 2001 Miami Hurricanes football team
 #misid cont: Ohio: Ohio State Buckeyes football, Washington: Washington Commanders
 for i, item in enumerate(team_sites):
@@ -28,7 +29,7 @@ for i, item in enumerate(team_sites):
         team_sites[i] = ("Ohio Bobcats", "Ohio Bobcats football")
     if item[0] == "Washington":
         team_sites[i] = ("Washington Huskies", "Washington Huskies football")
-#pprint.pprint(team_sites)
+
 
 df = pd.DataFrame(team_sites, columns=['School', 'Wiki Page'])
 df.to_csv('team_sites.csv', index=False)
