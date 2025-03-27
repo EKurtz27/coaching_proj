@@ -30,16 +30,10 @@ for i, item in enumerate(team_sites):
     if item[0] == "Washington":
         team_sites[i] = ("Washington Huskies", "Washington Huskies football")
 
-sites_dict = dict(team_sites)
+main_sites_dict = dict(team_sites)
+print(main_sites_dict)
 
-with open('team_sites.json', 'w') as f:
-    json.dump(sites_dict, f, indent=4)
-
-with open('team_sites.json', 'r') as my_file:
-    team_sites = json.load(my_file)
-
-
-def get_team_page(team, database): #Fix?
+def get_team_page(team, database):
     page_name = database[team]
     page = wp.page("'"+ page_name + "'", auto_suggest=True)
     links = page.links
@@ -51,15 +45,12 @@ def get_team_page(team, database): #Fix?
                                       
 
 team_coach_pages = {}
-for team in team_sites:
-    team_coach_pages[team] =  get_team_page(team, team_sites)
-
-with open('team_coach_pages.json', 'r') as my_file:
-    coach_list_pages = json.load(my_file)
-
-main_page_df = pd.DataFrame(coach_list_pages.items(), columns=['Team', 'Coaching List Page'])
-coach_list_df = pd.DataFrame(team_sites.items(), columns=['Team', 'Main Page'])
-df = pd.merge(coach_list_df, main_page_df, on='Team')
+for team in main_sites_dict.keys():
+    team_coach_pages[team] =  get_team_page(team, main_sites_dict)
+print(team_coach_pages)
+main_page_df = pd.DataFrame(main_sites_dict.items(), columns=['Team', 'Main Page'])
+coach_list_df = pd.DataFrame(team_coach_pages.items(), columns=['Team', 'Coaching List Page'])
+df = pd.merge(main_page_df, coach_list_df, on='Team')
 print(df)
 
 df_json = df.to_json()
