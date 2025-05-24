@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[11]:
-
-
 # Step 1: Pull the 'slug' for each coach to quickly load their respective webpage later
 # Pulls directly from the On3 API
 import requests
@@ -83,17 +77,13 @@ def pull_coach_slugs(url, params, output_file_name):
                     }
 
                     year_coach_data.append(coach_info) # Add each coach to the list of coaches for that year
-        #print(f"Number of coaches found in {year}: {len(year_coach_data)}")
+        print(f"Number of coaches found in {year}: {len(year_coach_data)}")
         all_years_data[year] = year_coach_data # Add that year to the larger dictionary
 
 
     json_output = json.dumps(all_years_data, indent=4)
     with open(f'{output_file_name}.json', 'w') as f:
       f.write(json_output)
-
-
-# In[12]:
-
 
 # Step 2: use the slugs to parse each coach's full coaching history from the On3 page using BeautifulSoup
 
@@ -128,9 +118,9 @@ def generate_coaching_database_json(input_file_name, json_output_name):
             page = requests.get(coach_on3_url)
             contents = page.content
 
-            soup = BeautifulSoup(contents)
+            soup = BeautifulSoup(contents, features="html.parser")
             all_jobs = soup.find_all('div', class_ = 'CoachHistory_historyListWrapper__i5n8y')
-
+            #print(f"{coach}'s Coaching History:"")
             for job in all_jobs:
                 team = job.find('h5', class_ = 'MuiTypography-root MuiTypography-h5 CoachHistory_teamName__2E139 css-6od08f-MuiTypography-root').text
                 position = job.find('span', class_ = 'MuiTypography-root MuiTypography-caption CoachHistory_position__QN_5S css-d163s0-MuiTypography-root').text
@@ -149,7 +139,7 @@ def generate_coaching_database_json(input_file_name, json_output_name):
                     seasons_with_team = end_year - start_year
                 else: 
                     seasons_with_team = end_year - start_year + 1
-                #print(f"{team.get_text()}, {position.get_text()}, from {start_year} to {end_year}, that's {seasons_with_team} seasons, employment at job equals {currently_employed}")
+                #print(f"{team}, {position}, from {start_year} to {end_year}, that's {seasons_with_team} seasons, employment at job equals {currently_employed}")
                 # Print debugger to check if the parsing is accurate
                 job_json = {
                     'Name': coach['Name'],
@@ -164,10 +154,6 @@ def generate_coaching_database_json(input_file_name, json_output_name):
 
     with open(f'{json_output_name}.json', 'w') as raw_data_file:
         json.dump(coaching_megalist, raw_data_file, indent=4)
-
-
-
-# In[13]:
 
 
 # Step 3: clean the JSON file by comparing JSON objects and recreating a clean list
@@ -189,10 +175,6 @@ def clean_duplicates_json(json_file_input, cleaned_file_name):
     with open(f'{cleaned_file_name}.json', 'w') as cleaned_data_file:
         json.dump(cleaned_list, cleaned_data_file, indent=4)
 
-
-# In[14]:
-
-
 import pandas as pd
 
 def cleaned_json_to_csv(cleaned_json_file, csv_file_name):  
@@ -207,10 +189,6 @@ def cleaned_json_to_csv(cleaned_json_file, csv_file_name):
     coaching_database = coaching_database_reordered.sort_values(by=['Start Year', 'Team'], ascending=False)
     coaching_database.to_csv(f'{csv_file_name}.csv', index = False)
 
-
-# In[15]:
-
-
 # Function Calls
 
 url = "https://api.on3.com/public/rdb/v1/coaches/salaries"
@@ -224,26 +202,12 @@ params = {
 
 pull_coach_slugs(url, params, 'coach_slugs')
 
-
-# In[16]:
-
-
 generate_coaching_database_json('coach_slugs', 'coach_jobs_raw')
-
-
-# In[17]:
-
 
 clean_duplicates_json('coach_jobs_raw', 'coach_jobs_clean')
 
-
-# In[18]:
-
-
 cleaned_json_to_csv('coach_jobs_clean', 'clean_sorted_coach_jobs')
 
-
-# In[ ]:
 
 
 

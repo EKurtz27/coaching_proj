@@ -1,0 +1,10 @@
+# Ignore virtual environments
+.venv/
+
+# Ignore data/output files
+coach_jobs_raw.json
+coach_slugs.json
+
+# Ignore system files
+.DS_Store
+Thumbs.db
