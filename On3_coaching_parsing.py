@@ -82,7 +82,7 @@ def pull_coach_slugs(url, params, output_file_name):
 
 
     json_output = json.dumps(all_years_data, indent=4)
-    with open(f'{output_file_name}.json', 'w') as f:
+    with open(f'data/{output_file_name}.json', 'w') as f:
       f.write(json_output)
 
 # Step 2: use the slugs to parse each coach's full coaching history from the On3 page using BeautifulSoup
@@ -152,7 +152,7 @@ def generate_coaching_database_json(input_file_name, json_output_name):
                 coaching_megalist.append(job_json)
 
 
-    with open(f'{json_output_name}.json', 'w') as raw_data_file:
+    with open(f'data/{json_output_name}.json', 'w') as raw_data_file:
         json.dump(coaching_megalist, raw_data_file, indent=4)
 
 
@@ -172,7 +172,7 @@ def clean_duplicates_json(json_file_input, cleaned_file_name):
         if coach_job_json not in cleaned_list:
             cleaned_list.append(coach_job_json)
 
-    with open(f'{cleaned_file_name}.json', 'w') as cleaned_data_file:
+    with open(f'data/{cleaned_file_name}.json', 'w') as cleaned_data_file:
         json.dump(cleaned_list, cleaned_data_file, indent=4)
 
 import pandas as pd
@@ -187,7 +187,7 @@ def cleaned_json_to_csv(cleaned_json_file, csv_file_name):
 
 
     coaching_database = coaching_database_reordered.sort_values(by=['Start Year', 'Team'], ascending=False)
-    coaching_database.to_csv(f'{csv_file_name}.csv', index = False)
+    coaching_database.to_csv(f'data/{csv_file_name}.csv', index = False)
 
 # Function Calls
 
