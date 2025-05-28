@@ -1,6 +1,8 @@
 import networkx as nx
 import pandas as pd
-import matplotlib as plt
+import numpy as np
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 # Need to research network x for best implementation
 
@@ -15,19 +17,20 @@ level4_coach = ['Defensive Ends Coach', 'Offensive Line Coach', 'Defensive Tackl
                 'Defensive Backs Coach', 'Linebackers Coach', 'Secondary Coach', 'Nickels', 'Offensive Tackles Coach', 'Inside Receivers Coach', 'Offensive Guards Coach', 
                 'Co-Quarterbacks Coach', 'Co-Running Backs Coach']
 
-def position_encoding (reference_df):
-    reference_df["Encoded Position"] = []
-    for coach_job in reference_df:
-        if coach_job['Position'] in level1_coach:
-            coach_job['Encoded Position'] = 1
-        elif coach_job['Position'] in level2_coach:
-            coach_job['Encoded Position'] = 2
-        elif coach_job['Position'] in level3_coach:
-            coach_job['Encoded Position'] = 3
-        elif coach_job['Position'] in level4_coach:
-            coach_job['Encoded Position'] = 4
+def position_encoding(reference_df):
+    def encode_position(pos):
+        if pos in level1_coach:
+            return 1
+        elif pos in level2_coach:
+            return 2
+        elif pos in level3_coach:
+            return 3
+        elif pos in level4_coach:
+            return 4
+        else:
+            return np.nan
 
-
+    reference_df["Encoded Position"] = reference_df["Position"].apply(encode_position)
 coaching_graph = nx.Graph()
 
 input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
@@ -35,11 +38,9 @@ input_file_name = input("Please enter the path to the CSV file you wish to read:
 with open(f"{input_file_name}", "r") as coach_jobs_csv:
     coach_jobs = pd.read_csv(coach_jobs_csv)
 
-all_positions = coach_jobs['Position'].unique()
-print(all_positions)
+position_encoding(coach_jobs)
 
 grouped_coaches = coach_jobs.groupby(by=["Season (Year)", "Team"])
-
 
 for category, coach_grouping in grouped_coaches:
     for idx1, coach in coach_grouping.iterrows():
@@ -47,10 +48,128 @@ for category, coach_grouping in grouped_coaches:
             if idx1 == idx2:
                 continue
             else:
-                coaching_graph.add_edge(coach["Name"], other_coach["Name"], {'relationship': f"{coach['Position']} to {other_coach['Position']}", 
-                                                                             'encoded_relationship': f"{coach['Encoded Position']} to {other_coach['Encoded Position']}"})
-                
+                coaching_graph.add_edge(
+                    coach["Name"],
+                    other_coach["Name"],
+                    relationship=f"{coach['Position']} to {other_coach['Position']}"
+                )
+
+pos = nx.spring_layout(coaching_graph)             
+
+edge_x = []
+edge_y = []
+edge_text = []
+for edge in coaching_graph.edges(data=True):
+    coach1 = edge[0]
+    coach2 = edge[1]
+    
+    coach1_posx, coach1_posy = pos[coach1]
+    coach2_posx, coach2_posy = pos[coach2]
+
+    edge_x.append(coach1_posx)
+    edge_x.append(coach2_posx)
+    edge_x.append(None)
+
+    edge_y.append(coach1_posy)
+    edge_y.append(coach2_posy)
+    edge_y.append(None)
+
+    rel = edge[2].get('relationship', '')
+    edge_text.append(rel)
+    edge_text.append(rel)
+    edge_text.append('')
+
+edge_trace = go.Scatter(
+    x=edge_x, y=edge_y,
+    line=dict(width=.5, color='#888'),
+    hoverinfo='none'  # Hover for information option generated below
+)
+
+# Add markers at edge midpoints for better hover hitboxes
+edge_marker_x = []
+edge_marker_y = []
+edge_marker_text = []
+
+for edge in coaching_graph.edges(data=True):
+    coach1 = edge[0]
+    coach2 = edge[1]
+    rel_raw = edge[2].get('relationship', '')
+    rel = f'{coach1} to {coach2}: {rel_raw}'
+    x1, y1 = pos[coach1]
+    x2, y2 = pos[coach2]
+    edge_marker_x.append((x1 + x2) / 2)
+    edge_marker_y.append((y1 + y2) / 2)
+    edge_marker_text.append(rel)
+
+edge_marker_trace = go.Scatter(
+    x=edge_marker_x,
+    y=edge_marker_y,
+    mode='markers',
+    marker=dict(size=4, color='red', opacity=0.8),
+    hoverinfo='text',
+    text=edge_marker_text,
+    showlegend=False
+)
+
+node_x = []
+node_y = []
+node_text = []
+node_adjacencies= []
+for node in coaching_graph.nodes():
+    x, y = pos[node]
+    node_x.append(x)
+    node_y.append(y)
+    node_text.append(node)
+    node_adjacencies.append(len(list(coaching_graph.adj[node])))
+
+node_trace = go.Scatter(
+    x=node_x, y=node_y,
+    mode='markers',
+    hoverinfo='text',
+    text=node_text,
+    marker=dict(
+        showscale=True,
+        # colorscale options
+        #'Greys' | 'YlGnBu' | 'Greens' | 'YlOrRd' | 'Bluered' | 'RdBu' |
+        #'Reds' | 'Blues' | 'Picnic' | 'Rainbow' | 'Portland' | 'Jet' |
+        #'Hot' | 'Blackbody' | 'Earth' | 'Electric' | 'Viridis' |
+        colorscale='YlGnBu',
+        reversescale=True,
+        color=node_adjacencies,
+        size=10,
+        colorbar=dict(
+            thickness=15,
+            title=dict(
+              text='Node Connections',
+              side='right'
+            ),
+            xanchor='left',
+        ),
+        line_width=2))
+
+fig = go.Figure(data=[edge_trace, edge_marker_trace, node_trace],
+                layout=go.Layout(
+                    title=dict(
+                        text= "<br>Network graph made with Python",
+                        font=dict(
+                            size=16
+                        )
+                    ),
+                    showlegend=False,
+                    hovermode='closest',
+                    margin=dict(b=20,l=5,r=5,t=40),
+                    annotations=[ dict(
+                    text="Python code: <a href='https://plotly.com/python/network-graphs/'> https://plotly.com/python/network-graphs/</a>",
+                    showarrow=False,
+                    xref="paper", yref="paper",
+                    x=0.005, y=-0.002 ) ],
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                )
+
+fig.show()
 
 
-nx.draw(coaching_graph)
-plt.savefig("test.png")
+
+print(f"Number of edges: {coaching_graph.number_of_edges()}")
+print(f"Number of nodes: {coaching_graph.number_of_nodes()}")
