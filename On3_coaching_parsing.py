@@ -77,7 +77,7 @@ def pull_coach_slugs(url, params, output_file_name):
                     }
 
                     year_coach_data.append(coach_info) # Add each coach to the list of coaches for that year
-        print(f"Number of coaches found in {year}: {len(year_coach_data)}")
+        #print(f"Number of coaches found in {year}: {len(year_coach_data)}")
         all_years_data[year] = year_coach_data # Add that year to the larger dictionary
 
 
@@ -99,14 +99,11 @@ def generate_coaching_database_json(input_file_name, json_output_name):
     Each coach's full coaching history is parsed using BeautifulSoup on the Coaching History table from each coach's On3 page.
     Each position a coach has served in is saved seperately, meaning most coaches have multiple JSON objects for each of their stops on their career.
 
-    Of note: Coaches whose tenure is listed as 'XXXX - present' are given an end date of the current year. To compensate for the current year's season not being over
-    (ex: the 2025 season will not be completed until 2026), all coaching tenures that do not have the 'present' label are given an extra season.
+    Of note: Coaches whose tenure is listed as 'XXXX - present' are given an end date of the current year.
 
-    This means a new coach with a tenure of '2024 - present' is interpreted as '2024 - 2025', and therefore has completed 1 season with the team, because
-    the 2025 season has not yet happened. Conversely, a coach with a tenure of '2016-2018' completed the 2016, 17, and 18 seasons, so a season is added to compensate
-    for 2016-2018 equaling 2.
+    This means a new coach with a tenure of '2024 - present' is interpreted as '2024 - 2025'.
     """
-    with open(f'{input_file_name}.json', 'r') as f:
+    with open(f'data/{input_file_name}.json', 'r') as f:
         json_data = json.load(f)
 
     coaching_megalist = []
@@ -131,25 +128,19 @@ def generate_coaching_database_json(input_file_name, json_output_name):
                 currently_employed = False
                 if end_year == 'present':
                     end_year = datetime.now().year
-                    currently_employed = True # Discounts current season in calculation of number of seasons with team
                 else: 
                     end_year = int(end_year)
 
-                if currently_employed == True:
-                    seasons_with_team = end_year - start_year
-                else: 
-                    seasons_with_team = end_year - start_year + 1
-                #print(f"{team}, {position}, from {start_year} to {end_year}, that's {seasons_with_team} seasons, employment at job equals {currently_employed}")
+                #print(f"{team}, {position}, from {start_year} to {end_year}")
                 # Print debugger to check if the parsing is accurate
-                job_json = {
-                    'Name': coach['Name'],
-                    'Team': team,
-                    'Position': position,
-                    'Start Year': start_year,
-                    'End Year': end_year,
-                    'Seasons with Team': seasons_with_team
-                }
-                coaching_megalist.append(job_json)
+                for year in range(start_year, (end_year + 1)): # Seperate entries for each year makes it easier to graph, even if it makes a larger dataset
+                    job_json = {
+                        'Name': coach['Name'],
+                        'Team': team,
+                        'Position': position,
+                        'Season (Year)': year
+                    }
+                    coaching_megalist.append(job_json)
 
 
     with open(f'data/{json_output_name}.json', 'w') as raw_data_file:
@@ -163,7 +154,7 @@ def clean_duplicates_json(json_file_input, cleaned_file_name):
     Cleans a the JSON file of coaching positions by creating a new list of JSON objects without duplicates and then writing a new file. 
     """
 
-    with open(f'{json_file_input}.json', 'r') as raw_data_file:
+    with open(f'data/{json_file_input}.json', 'r') as raw_data_file:
         raw_data = json.load(raw_data_file)
 
     cleaned_list = []
@@ -179,14 +170,15 @@ import pandas as pd
 
 def cleaned_json_to_csv(cleaned_json_file, csv_file_name):  
     """
-
+    Converts the cleaned master file of coaching jobs into a CSV file for easier visualization and human referencing.
+    Reorders values into: Season the job took place (based on the year the season started), Team, Coach Name, and Coaching Position 
     """
-    df = pd.read_json(f'{cleaned_json_file}.json')
-    coaching_database_reordered = df.loc[:, ['Start Year', 'End Year', 'Team', 'Name', 'Position', 'Seasons with Team']].drop('End Year', axis = 1)
+    df = pd.read_json(f'data/{cleaned_json_file}.json')
+    coaching_database_reordered = df.loc[:, ['Season (Year)', 'Team', 'Name', 'Position']]
 
 
 
-    coaching_database = coaching_database_reordered.sort_values(by=['Start Year', 'Team'], ascending=False)
+    coaching_database = coaching_database_reordered.sort_values(by=['Season (Year)', 'Team'], ascending=False)
     coaching_database.to_csv(f'data/{csv_file_name}.csv', index = False)
 
 # Function Calls
@@ -201,10 +193,13 @@ params = {
 }
 
 pull_coach_slugs(url, params, 'coach_slugs')
+print("Generated slugs for each found coach, now parsing their coaching histories. This may take upwards of 10 minutes.")
 
 generate_coaching_database_json('coach_slugs', 'coach_jobs_raw')
+print("Parsing complete, now cleaning the parsed data.")
 
 clean_duplicates_json('coach_jobs_raw', 'coach_jobs_clean')
+print("Cleaning complete, now sorting and generating a CSV file for easy reading.")
 
 cleaned_json_to_csv('coach_jobs_clean', 'clean_sorted_coach_jobs')
 

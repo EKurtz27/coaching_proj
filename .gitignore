@@ -4,6 +4,7 @@
 # Ignore data/output files
 coach_jobs_raw.json
 coach_slugs.json
+current_position_encoding.txt
 
 # Ignore system files
 .DS_Store
