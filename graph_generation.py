@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import random
 
 # Need to research network x for best implementation
 
@@ -31,7 +32,7 @@ def position_encoding(reference_df):
             return np.nan
 
     reference_df["Encoded Position"] = reference_df["Position"].apply(encode_position)
-coaching_graph = nx.Graph()
+coaching_graph = nx.DiGraph()
 
 input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
 
@@ -40,8 +41,25 @@ with open(f"{input_file_name}", "r") as coach_jobs_csv:
 
 position_encoding(coach_jobs)
 
-grouped_coaches = coach_jobs.groupby(by=["Season (Year)", "Team"])
+grouped_coaches = coach_jobs.groupby(by=["Starting Season", "Team"])
 
+def parse_seasons(val):
+    import ast
+    if pd.isna(val):
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            return ast.literal_eval(val)
+        except Exception:
+            return [int(x) for x in val.split(',') if x.strip().isdigit()]
+    return []
+
+encoded_connections = {}
+years_of_edges = {}
+teams_of_edges = {}
+mentor_status = {}
 for category, coach_grouping in grouped_coaches:
     for idx1, coach in coach_grouping.iterrows():
         for idx2, other_coach in coach_grouping.iterrows(): # This double loop method generates bidirectional connections automatically
@@ -53,8 +71,24 @@ for category, coach_grouping in grouped_coaches:
                     other_coach["Name"],
                     relationship=f"{coach['Position']} to {other_coach['Position']}"
                 )
+                encoded_connections[(coach['Name'], other_coach['Name'])] = (coach['Encoded Position'], other_coach['Encoded Position'])
+                years_of_edges[(coach['Name'], other_coach['Name'])] = list(set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position'])))
+                teams_of_edges[(coach['Name'], other_coach['Name'])] = coach['Team']
+                indiv_mentor_status = "Not a Mentor"  # Was the coach at the end of the edge a mentor to the coach at the start of the edge (0 = No)
+                if other_coach['Encoded Position'] < coach['Encoded Position']:
+                    indiv_mentor_status = "Mentor" # The coach was a distinct mentor
+                if other_coach['Encoded Position'] == coach['Encoded Position']:
+                    indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
+                mentor_status[(coach['Name'], other_coach['Name'])] = indiv_mentor_status
 
-pos = nx.spring_layout(coaching_graph)             
+
+pos = nx.spring_layout(coaching_graph)
+
+nx.set_edge_attributes(coaching_graph, encoded_connections, "Encoded Connection")
+nx.set_edge_attributes(coaching_graph, years_of_edges, "Years of Connection")
+nx.set_edge_attributes(coaching_graph, teams_of_edges, "Team of Connection")
+nx.set_edge_attributes(coaching_graph, mentor_status, "Mentor Status")
+             
 
 edge_x = []
 edge_y = []
@@ -94,12 +128,22 @@ for edge in coaching_graph.edges(data=True):
     coach1 = edge[0]
     coach2 = edge[1]
     rel_raw = edge[2].get('relationship', '')
+    years = edge[2].get('Years of Connection', [])
+    team = edge[2].get('Team of Connection', '')
+    mentor = edge[2].get('Mentor Status', '')
     rel = f'{coach1} to {coach2}: {rel_raw}'
+    hover_str = (
+        f"{coach1} to {coach2}: {rel_raw}<br>"
+        f"Years: {years}<br>"
+        f"Team: {team}<br>"
+        f"Mentor Status: {mentor}"
+    )
+
     x1, y1 = pos[coach1]
     x2, y2 = pos[coach2]
     edge_marker_x.append((x1 + x2) / 2)
     edge_marker_y.append((y1 + y2) / 2)
-    edge_marker_text.append(rel)
+    edge_marker_text.append(hover_str)
 
 edge_marker_trace = go.Scatter(
     x=edge_marker_x,
@@ -173,3 +217,5 @@ fig.show()
 
 print(f"Number of edges: {coaching_graph.number_of_edges()}")
 print(f"Number of nodes: {coaching_graph.number_of_nodes()}")
+
+

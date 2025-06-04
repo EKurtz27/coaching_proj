@@ -130,17 +130,22 @@ def generate_coaching_database_json(input_file_name, json_output_name):
                     end_year = datetime.now().year
                 else: 
                     end_year = int(end_year)
-
+                
+                if currently_employed == True: # Does not include upcoming season
+                    seasons_at_position = list(range(start_year, end_year))
+                else:
+                    seasons_at_position = list(range(start_year, end_year + 1))
                 #print(f"{team}, {position}, from {start_year} to {end_year}")
                 # Print debugger to check if the parsing is accurate
-                for year in range(start_year, (end_year + 1)): # Seperate entries for each year makes it easier to graph, even if it makes a larger dataset
-                    job_json = {
-                        'Name': coach['Name'],
-                        'Team': team,
-                        'Position': position,
-                        'Season (Year)': year
-                    }
-                    coaching_megalist.append(job_json)
+                job_json = {
+                    'Name': coach['Name'],
+                    'Team': team,
+                    'Position': position,
+                    'Starting Season': start_year,
+                    'Seasons at Position': seasons_at_position
+                }
+                coaching_megalist.append(job_json)
+        print(f"finished parsing year {year}")
 
 
     with open(f'data/{json_output_name}.json', 'w') as raw_data_file:
@@ -174,11 +179,11 @@ def cleaned_json_to_csv(cleaned_json_file, csv_file_name):
     Reorders values into: Season the job took place (based on the year the season started), Team, Coach Name, and Coaching Position 
     """
     df = pd.read_json(f'data/{cleaned_json_file}.json')
-    coaching_database_reordered = df.loc[:, ['Season (Year)', 'Team', 'Name', 'Position']]
+    coaching_database_reordered = df.loc[:, ['Starting Season', 'Team', 'Name', 'Position', 'Seasons at Position']]
 
 
 
-    coaching_database = coaching_database_reordered.sort_values(by=['Season (Year)', 'Team'], ascending=False)
+    coaching_database = coaching_database_reordered.sort_values(by=['Starting Season', 'Team'], ascending=False)
     coaching_database.to_csv(f'data/{csv_file_name}.csv', index = False)
 
 # Function Calls
