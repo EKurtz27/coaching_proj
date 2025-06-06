@@ -31,17 +31,17 @@ def position_encoding(reference_df):
 
     reference_df["Encoded Position"] = reference_df["Position"].apply(encode_position)
 
-def create_nx_graph():    
+if __name__ == "__main__":
+    input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
+    with open(f"{input_file_name}", "r") as coach_jobs_csv:
+        coach_jobs_df = pd.read_csv(coach_jobs_csv)
+
+def create_nx_graph(coach_jobs_df):    
     coaching_graph = nx.DiGraph()
 
-    input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
+    position_encoding(coach_jobs_df)
 
-    with open(f"{input_file_name}", "r") as coach_jobs_csv:
-        coach_jobs = pd.read_csv(coach_jobs_csv)
-
-    position_encoding(coach_jobs)
-
-    grouped_coaches = coach_jobs.groupby(by=["Starting Season", "Team"])
+    grouped_coaches = coach_jobs_df.groupby(by=["Starting Season", "Team"])
 
     def parse_seasons(val):
         import ast
@@ -80,19 +80,19 @@ def create_nx_graph():
                     if other_coach['Encoded Position'] == coach['Encoded Position']:
                         indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
                     mentor_status[(coach['Name'], other_coach['Name'])] = indiv_mentor_status
-    return coaching_graph, encoded_connections, years_of_edges, teams_of_edges, mentor_status
-
-
-def plotly_graph():
-    coaching_graph, encoded_connections, years_of_edges, teams_of_edges, mentor_status = create_nx_graph()
-
-    pos = nx.forceatlas2_layout(coaching_graph, scaling_ratio = 5)
 
     nx.set_edge_attributes(coaching_graph, encoded_connections, "Encoded Connection")
     nx.set_edge_attributes(coaching_graph, years_of_edges, "Years of Connection")
     nx.set_edge_attributes(coaching_graph, teams_of_edges, "Team of Connection")
     nx.set_edge_attributes(coaching_graph, mentor_status, "Mentor Status")
-                
+
+    return coaching_graph
+
+
+def plotly_graph():
+    coaching_graph = create_nx_graph(coach_jobs_df)
+
+    pos = nx.forceatlas2_layout(coaching_graph, scaling_ratio = 5)                
 
     edge_x = []
     edge_y = []
