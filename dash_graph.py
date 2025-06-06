@@ -2,7 +2,9 @@ from basic_graph_generation import create_nx_graph
 import networkx as nx            
 import dash_cytoscape as cyto    
 import dash                      
-from dash import dcc, html     
+from dash import dcc, html
+
+cyto.load_extra_layouts()
 
 def nx_to_cytoscape(G):
     elements = []
@@ -45,7 +47,8 @@ app.layout = html.Div([
     cyto.Cytoscape(
         id='cytoscape',
         elements=[],  # Start empty
-        layout={'name': 'circle'},
+        layout={'name': 'fcose',
+                'idealEdgeLength': 200},
         stylesheet=[
             {'selector': 'node', 'style': {'label': 'data(label)'}},
             {'selector': 'edge', 'style': {
