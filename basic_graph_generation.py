@@ -81,10 +81,10 @@ def create_nx_graph(coach_jobs_df):
                         indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
                     mentor_status[(coach['Name'], other_coach['Name'])] = indiv_mentor_status
 
-    nx.set_edge_attributes(coaching_graph, encoded_connections, "Encoded Connection")
-    nx.set_edge_attributes(coaching_graph, years_of_edges, "Years of Connection")
-    nx.set_edge_attributes(coaching_graph, teams_of_edges, "Team of Connection")
-    nx.set_edge_attributes(coaching_graph, mentor_status, "Mentor Status")
+    nx.set_edge_attributes(coaching_graph, encoded_connections, "encoded_connection")
+    nx.set_edge_attributes(coaching_graph, years_of_edges, "years_of_connection")
+    nx.set_edge_attributes(coaching_graph, teams_of_edges, "team_of_connection")
+    nx.set_edge_attributes(coaching_graph, mentor_status, "mentor_status")
 
     return coaching_graph
 
