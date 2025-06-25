@@ -85,8 +85,6 @@ app.layout = html.Div([
                 'curve-style': 'bezier',
                 'label': 'data(label)',
                 'width': 1
-                'label': 'data(label)',
-                'width': 1
             }}
         ],
         style={'width': '100%', 'height': '600px'}
