@@ -1,5 +1,6 @@
 # Ignore virtual environments
 activate_home_venv.ps1
+*.py[cod]
 
 # Ignore data/output files
 coach_jobs_raw.json
