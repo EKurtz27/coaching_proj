@@ -65,7 +65,15 @@ app.layout = html.Div([
         elements=[],  # Start empty
         layout={'name': 'circle'
                 },
+        layout={'name': 'circle'
+                },
         stylesheet=[
+            {'selector': 'node', 'style': {
+                'label': 'data(label)',
+                'height': 10,
+                'width': 10,
+                'font-size': 5
+                }},
             {'selector': 'node', 'style': {
                 'label': 'data(label)',
                 'height': 10,
@@ -75,6 +83,8 @@ app.layout = html.Div([
             {'selector': 'edge', 'style': {
                 'line-color': '#aaa',
                 'curve-style': 'bezier',
+                'label': 'data(label)',
+                'width': 1
                 'label': 'data(label)',
                 'width': 1
             }}
