@@ -60,6 +60,7 @@ def create_nx_graph(coach_jobs_df):
     years_of_edges = {}
     teams_of_edges = {}
     mentor_status = {}
+    visualization_tracker = {} # Having an edge for each direction is important for searching, but not vizualization. Reduces vizualized edges by half
     for category, coach_grouping in grouped_coaches:
         for idx1, coach in coach_grouping.iterrows():
             for idx2, other_coach in coach_grouping.iterrows(): # This double loop method generates bidirectional connections automatically
@@ -80,11 +81,15 @@ def create_nx_graph(coach_jobs_df):
                     if other_coach['Encoded Position'] == coach['Encoded Position']:
                         indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
                     mentor_status[(coach['Name'], other_coach['Name'])] = indiv_mentor_status
+                    if idx1 > idx2:
+                        visualization_tracker[(coach['Name'], other_coach['Name'])] = 0
+                    if idx1 < idx2: visualization_tracker[(coach['Name'], other_coach['Name'])] = 1
 
-    nx.set_edge_attributes(coaching_graph, encoded_connections, "Encoded Connection")
-    nx.set_edge_attributes(coaching_graph, years_of_edges, "Years of Connection")
-    nx.set_edge_attributes(coaching_graph, teams_of_edges, "Team of Connection")
-    nx.set_edge_attributes(coaching_graph, mentor_status, "Mentor Status")
+    nx.set_edge_attributes(coaching_graph, encoded_connections, "encoded_connection")
+    nx.set_edge_attributes(coaching_graph, years_of_edges, "years_of_connection")
+    nx.set_edge_attributes(coaching_graph, teams_of_edges, "team_of_connection")
+    nx.set_edge_attributes(coaching_graph, mentor_status, "mentor_status")
+    nx.set_edge_attributes(coaching_graph, visualization_tracker, "visualization_tracker")
 
     return coaching_graph
 
@@ -98,29 +103,30 @@ def plotly_graph():
     edge_y = []
     edge_text = []
     for edge in coaching_graph.edges(data=True):
-        coach1 = edge[0]
-        coach2 = edge[1]
-        
-        coach1_posx, coach1_posy = pos[coach1]
-        coach2_posx, coach2_posy = pos[coach2]
+        if edge[2].get('vizualization_tracker') == 1:   
+            coach1 = edge[0]
+            coach2 = edge[1]
+            
+            coach1_posx, coach1_posy = pos[coach1]
+            coach2_posx, coach2_posy = pos[coach2]
 
-        edge_x.append(coach1_posx)
-        edge_x.append(coach2_posx)
-        edge_x.append(None)
+            edge_x.append(coach1_posx)
+            edge_x.append(coach2_posx)
+            edge_x.append(None)
 
-        edge_y.append(coach1_posy)
-        edge_y.append(coach2_posy)
-        edge_y.append(None)
+            edge_y.append(coach1_posy)
+            edge_y.append(coach2_posy)
+            edge_y.append(None)
 
-        rel = edge[2].get('relationship', '')
-        edge_text.append(rel)
-        edge_text.append(rel)
-        edge_text.append('')
+            rel = edge[2].get('relationship', '')
+            edge_text.append(rel)
+            edge_text.append(rel)
+            edge_text.append('')
 
-    edge_trace = go.Scatter(
-        x=edge_x, y=edge_y,
-        line=dict(width=.5, color='#888'),
-        hoverinfo='none'  # Hover for information option generated below
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            line=dict(width=.5, color='#888'),
+            hoverinfo='none'  # Hover for information option generated below
     )
 
     # Add markers at edge midpoints for better hover hitboxes
