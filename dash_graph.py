@@ -10,6 +10,8 @@ import io
 import pandas as pd
 from dash.dependencies import Input, Output, State
 
+cyto.load_extra_layouts
+
 def nx_to_cytoscape(G):
     elements = []
 
@@ -65,8 +67,7 @@ app.layout = html.Div([
         elements=[],  # Start empty
         layout={'name': 'circle'
                 },
-        layout={'name': 'circle'
-                },
+
         stylesheet=[
             {'selector': 'node', 'style': {
                 'label': 'data(label)',
@@ -74,12 +75,7 @@ app.layout = html.Div([
                 'width': 10,
                 'font-size': 5
                 }},
-            {'selector': 'node', 'style': {
-                'label': 'data(label)',
-                'height': 10,
-                'width': 10,
-                'font-size': 5
-                }},
+
             {'selector': 'edge', 'style': {
                 'line-color': '#aaa',
                 'curve-style': 'bezier',
@@ -102,7 +98,24 @@ app.layout = html.Div([
         id='year_select'
     ),
     html.Button("Update Parameters", id='update_button', n_clicks=0),
-    html.Div(id='legend-container')
+    html.Div(id='legend-container'),
+    html.Div(className='row', children=[
+        html.Div([
+            dcc.Markdown("""
+                **Hover Data**
+                
+                Mouse over values in the graph
+            """),
+            html.Pre(id='coach-name-hover', style= {
+                'border': 'thin lightgrey solid',
+                'overflowX': 'scroll'
+            }),
+            html.Pre(id='coach-teams-hover', style= {
+                'border': 'thin lightgrey solid',
+                'overflowX': 'scroll'
+            }),
+        ], className='three columns')
+    ])
 ])
 
 @app.callback(
@@ -121,7 +134,7 @@ def generate_graph(contents, filename):
         if 'csv' in filename:
             df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
             team_list = ['All'] + sorted(df['Team'].unique().tolist())
-            year_list = ['All'] + sorted(df['Starting Season'].unique().tolist())
+            year_list = ['All'] + sorted(df['Starting Season'].unique().tolist(), reverse= True)
             G = create_nx_graph(df)
             return nx_to_cytoscape(G), team_list, year_list 
         else: return [], [], []
@@ -229,6 +242,23 @@ def update_graph(n_clicks, team_values, year_values, elements, team_options, yea
     legend = html.Div(legend_items, style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
 
     return unselected_stylesheet + highlight_styles, False, legend
+
+@app.callback(
+    Output('coach-name-hover', 'children'),
+    Output('coach-teams-hover', 'children'),
+    Input('cytoscape', 'mouseoverNodeData'),
+    Input('cytoscape', 'elements')
+)
+def display_hover_data(hoverData, elements):
+    if hoverData and 'label' in hoverData:
+        teams_coached = []
+        for el in elements:
+            data = el.get('data', {})
+            if data.get('source', "") == hoverData['label'] and not (data.get('team_of_connection') in teams_coached):
+                teams_coached.append(data.get('team_of_connection'))
+        return "You are hovering over " + hoverData['label'], '\n'.join(teams_coached)
+    else:
+        return "Hover over a node", "The teams a coach has worked for will be shown here"
 
 if __name__ == '__main__':
     app.run(debug=True)

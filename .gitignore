@@ -2,6 +2,7 @@ __pycache__/
 
 
 # Ignore virtual environments
+/coaching_venv
 activate_home_venv.ps1
 
 # Ignore data/output files
