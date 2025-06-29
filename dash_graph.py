@@ -219,42 +219,26 @@ def generate_graph(contents, filename, json_clicks):
 @app.callback(
     Output('team_year_combo_display', 'children'),
     Output('team_year_combo_store', 'data'),
-    Input('team_year_combo_button', 'n_clicks'),
-    State('team_year_combo_store', 'data'),
-    State('team_select', 'value'),
-    State('year_select', 'value'),
-)
-def submit_team_year_combo(n_clicks, current_selections, team_selection, year_selections):
-    if n_clicks == 0:
-        return [], []
-    if team_selection is None or year_selections is None:
-        return [], []
-    if not isinstance(team_selection, list):
-        team_selection = [team_selection]
-    if not isinstance(year_selections, list):
-        year_selections = [year_selections]
-    new_team_year_combos = list(itertools.product(team_selection, year_selections))
-    team_year_combos = current_selections + new_team_year_combos
-    # Convert each tuple to a string like "Team - Year"
-    combo_strings = [f"{team} - {year}" for team, year in team_year_combos]
-    return ", ".join(combo_strings), team_year_combos
-
-
-@app.callback(
     Output('cytoscape', 'layout'),
     Output('cytoscape', 'stylesheet'),
     Output('empty-parameter-warning', 'displayed'),
     Output('legend-container', 'children'),
     Output('all-all-warning', 'displayed'),
-    Output('team_year_combo_store', 'data'),
+    Input('team_year_combo_button', 'n_clicks'),
     Input('update_button', 'n_clicks'),
     Input('clear_params', 'n_clicks'),
     State('team_year_combo_store', 'data'),
+    State('team_select', 'value'),
+    State('year_select', 'value'),
     State('cytoscape', 'elements'),
     State('team_select', 'options'),
     State('year_select', 'options')
 )
-def update_graph(update_n_clicks, clear_n_clicks, team_year_combos, elements, team_options, year_options):    
+def unified_callback(
+    combo_n_clicks, update_n_clicks, clear_n_clicks,
+    current_selections, team_selection, year_selections,
+    elements, team_options, year_options
+):
     unselected_stylesheet = [
         {'selector': 'node', 'style': {
             'label': 'data(label)',
@@ -271,37 +255,48 @@ def update_graph(update_n_clicks, clear_n_clicks, team_year_combos, elements, te
             'opacity': 0
         }}
     ]
-    ctx = callback_context
-    if not callback_context:
-        return dash.no_update, dash.no_update, False, dash.no_update, False
     
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        # return all outputs as dash.no_update or empty
+        return "", [], dash.no_update, dash.no_update, False, None, False
+
     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
+
+    # Handle clear
     if trigger_id == "clear_params":
-        layout = {'name': 'circle'}
-        return layout, default_stylesheet, False, None, False, []
-    
-    elif trigger_id == "update_button":
+        return "", [], {'name': 'circle'}, default_stylesheet, False, None, False
+
+    # Handle combo button
+    if trigger_id == "team_year_combo_button":
+        if combo_n_clicks == 0 or team_selection is None or year_selections is None:
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, False, None, False
+        if not isinstance(team_selection, list):
+            team_selection = [team_selection]
+        if not isinstance(year_selections, list):
+            year_selections = [year_selections]
+        new_team_year_combos = list(itertools.product(team_selection, year_selections))
+        if current_selections is None:
+            current_selections = []
+        # Convert everything to tuples, dcc.storage unpacks tuples when converting to JSON
+        current_selections = [tuple(x) for x in current_selections]
+        new_team_year_combos = [tuple(x) for x in new_team_year_combos]
+        team_year_combos = list(set(current_selections + new_team_year_combos))
+        combo_strings = [f"{team} - {year}" for team, year in team_year_combos]
+        return ", ".join(combo_strings), team_year_combos, dash.no_update, dash.no_update, False, None, False
+
+    # Handle update button (your update_graph logic here)
+    if trigger_id == "update_button":
         highlight_styles = []
 
-        if team_year_combos == []:
-            return dash.no_update, dash.no_update, True, dash.no_update, False, dash.no_update
-
-        team_list =  team_options
-        year_list = year_options
-
-        #if "All" in year_values:
-            #year_values = year_list[1:]
-        # "All" in team_values:
-            #team_values = team_list[1:]
-        team_all_selected = False
-        year_all_selected = False
-
-        combinations = list(team_year_combos)
-        for combo in team_year_combos:
+        if current_selections == []:
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, True, dash.no_update, False
+        
+        combinations = current_selections
+        for combo in current_selections:
             team, year = combo
             if team == "All" and year == "All":
-                return dash.no_update, dash.no_update, False, None, True, dash.no_update
+                return dash.no_update, dash.no_update, False, None, False, dash.no_update, True
             elif team == "All":
                 combinations.extend([(t, year) for t in team_options[1:]])
                 combinations = [combo for combo in combinations if "All" not in combo]
@@ -309,7 +304,8 @@ def update_graph(update_n_clicks, clear_n_clicks, team_year_combos, elements, te
                 combinations.extend([(team, y) for y in year_options[1:]])
                 combinations = [combo for combo in combinations if "All" not in combo]
 
-
+        combinations = [tuple(x) for x in combinations] # Re-tuple again when pulling from storage
+        combinations = list(set(combinations))
         total = len(combinations)
 
         legend_items = []
@@ -356,10 +352,10 @@ def update_graph(update_n_clicks, clear_n_clicks, team_year_combos, elements, te
         legend = html.Div(legend_items, style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
         layout = {'name': 'random'}
         
-        return layout, unselected_stylesheet + highlight_styles, False, legend, False, dash.no_update
+        return dash.no_update, dash.no_update, layout, unselected_stylesheet + highlight_styles, False, legend, False
     
     else:
-        return dash.no_update, dash.no_update, False, None, False, dash.no_update
+        return dash.no_update, dash.no_update, False, None, False, dash.no_update, False
 
 @app.callback(
     Output('coach-name-click', 'children'),
