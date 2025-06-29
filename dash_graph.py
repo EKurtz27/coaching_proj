@@ -64,7 +64,12 @@ app = dash.Dash('Test Run')
 app.layout = html.Div([
     dcc.ConfirmDialog(
         id='empty-parameter-warning',
-        message="Please select an option for all parameters. Use the 'All' option if unsure what to select"
+        message="Please select at least one combination of CFB team and year."
+    ),
+    dcc.ConfirmDialog(
+        id='all-all-warning',
+        message="We are unable to accommodate an 'All', 'All' parameter selection." \
+        "Please select a narrower range of parameters"
     ),
     dcc.Upload(
         id='upload-data',
@@ -112,7 +117,7 @@ app.layout = html.Div([
     ),
     dcc.Dropdown(
         options= [],
-        multi= True,
+        multi= False,
         placeholder= 'Select some teams',
         id='team_select'
     ),
@@ -122,21 +127,29 @@ app.layout = html.Div([
         placeholder= 'Select some years',
         id='year_select'
     ),
+    
+    html.Pre(id="team_year_combo_display", style= {
+        'border': 'thin lightgrey solid', 
+        'overflowX': 'scroll'
+    }),
+
+    html.Button("Submit Team & Year Combination", id='team_year_combo_button', n_clicks=0),
+    dcc.Store(id='team_year_combo_store', storage_type='session'),
     html.Button("Update Parameters", id='update_button', n_clicks=0),
     html.Button("Clear Parameters", id='clear_params', n_clicks=0),
     html.Div(id='legend-container'),
     html.Div(className='row', children=[
         html.Div([
             dcc.Markdown("""
-                **Hover Data**
+                **Click Data**
                 
                 Mouse over values in the graph
             """),
-            html.Pre(id='coach-name-hover', style= {
+            html.Pre(id='coach-name-click', style= {
                 'border': 'thin lightgrey solid',
                 'overflowX': 'scroll'
             }),
-            html.Pre(id='coach-teams-hover', style= {
+            html.Pre(id='coach-teams-click', style= {
                 'border': 'thin lightgrey solid',
                 'overflowX': 'scroll'
             }),
@@ -203,22 +216,45 @@ def generate_graph(contents, filename, json_clicks):
     else:
         return [], [], []
 
+@app.callback(
+    Output('team_year_combo_display', 'children'),
+    Output('team_year_combo_store', 'data'),
+    Input('team_year_combo_button', 'n_clicks'),
+    State('team_year_combo_store', 'data'),
+    State('team_select', 'value'),
+    State('year_select', 'value'),
+)
+def submit_team_year_combo(n_clicks, current_selections, team_selection, year_selections):
+    if n_clicks == 0:
+        return [], []
+    if team_selection is None or year_selections is None:
+        return [], []
+    if not isinstance(team_selection, list):
+        team_selection = [team_selection]
+    if not isinstance(year_selections, list):
+        year_selections = [year_selections]
+    new_team_year_combos = list(itertools.product(team_selection, year_selections))
+    team_year_combos = current_selections + new_team_year_combos
+    # Convert each tuple to a string like "Team - Year"
+    combo_strings = [f"{team} - {year}" for team, year in team_year_combos]
+    return ", ".join(combo_strings), team_year_combos
+
 
 @app.callback(
     Output('cytoscape', 'layout'),
     Output('cytoscape', 'stylesheet'),
     Output('empty-parameter-warning', 'displayed'),
     Output('legend-container', 'children'),
+    Output('all-all-warning', 'displayed'),
+    Output('team_year_combo_store', 'data'),
     Input('update_button', 'n_clicks'),
     Input('clear_params', 'n_clicks'),
-    State('team_select', 'value'),
-    State('year_select', 'value'),
+    State('team_year_combo_store', 'data'),
     State('cytoscape', 'elements'),
-    State('cytoscape', 'stylesheet'),
     State('team_select', 'options'),
     State('year_select', 'options')
 )
-def update_graph(update_n_clicks, clear_n_clicks, team_values, year_values, elements, intro_stylesheet, team_options, year_options):    
+def update_graph(update_n_clicks, clear_n_clicks, team_year_combos, elements, team_options, year_options):    
     unselected_stylesheet = [
         {'selector': 'node', 'style': {
             'label': 'data(label)',
@@ -237,38 +273,43 @@ def update_graph(update_n_clicks, clear_n_clicks, team_values, year_values, elem
     ]
     ctx = callback_context
     if not callback_context:
-        return dash.no_update, dash.no_update, False, dash.no_update
+        return dash.no_update, dash.no_update, False, dash.no_update, False
     
     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
     
     if trigger_id == "clear_params":
         layout = {'name': 'circle'}
-        return layout, default_stylesheet, False, None
+        return layout, default_stylesheet, False, None, False, []
     
     elif trigger_id == "update_button":
         highlight_styles = []
 
-        if not team_values and not year_values:
-            layout = {'name': 'circle'}
-            return layout, default_stylesheet, False, None
-
-        if not team_values or not year_values:
-            return dash.no_update, dash.no_update, True, dash.no_update
+        if team_year_combos == []:
+            return dash.no_update, dash.no_update, True, dash.no_update, False, dash.no_update
 
         team_list =  team_options
         year_list = year_options
 
-        if not isinstance(team_values, list):
-            team_values = [team_values]
-        if not isinstance(year_values, list):
-            year_values = [year_values]
+        #if "All" in year_values:
+            #year_values = year_list[1:]
+        # "All" in team_values:
+            #team_values = team_list[1:]
+        team_all_selected = False
+        year_all_selected = False
 
-        if "All" in year_values:
-            year_values = year_list[1:]
-        if "All" in team_values:
-            team_values = team_list[1:]
+        combinations = list(team_year_combos)
+        for combo in team_year_combos:
+            team, year = combo
+            if team == "All" and year == "All":
+                return dash.no_update, dash.no_update, False, None, True, dash.no_update
+            elif team == "All":
+                combinations.extend([(t, year) for t in team_options[1:]])
+                combinations = [combo for combo in combinations if "All" not in combo]
+            elif year == "All":
+                combinations.extend([(team, y) for y in year_options[1:]])
+                combinations = [combo for combo in combinations if "All" not in combo]
 
-        combinations = list(itertools.product(team_values, year_values))
+
         total = len(combinations)
 
         legend_items = []
@@ -315,40 +356,40 @@ def update_graph(update_n_clicks, clear_n_clicks, team_values, year_values, elem
         legend = html.Div(legend_items, style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
         layout = {'name': 'random'}
         
-        return layout, unselected_stylesheet + highlight_styles, False, legend
+        return layout, unselected_stylesheet + highlight_styles, False, legend, False, dash.no_update
     
     else:
-        return dash.no_update, dash.no_update, False, None
+        return dash.no_update, dash.no_update, False, None, False, dash.no_update
 
 @app.callback(
-    Output('coach-name-hover', 'children'),
-    Output('coach-teams-hover', 'children'),
-    Input('cytoscape', 'mouseoverNodeData'),
+    Output('coach-name-click', 'children'),
+    Output('coach-teams-click', 'children'),
+    Input('cytoscape', 'tapNodeData'),
     Input('cytoscape', 'elements')
 )
-def display_hover_data(hoverData, elements):
-    if hoverData and 'label' in hoverData:
+def display_click_data(clickData, elements):
+    if clickData and 'label' in clickData:
         years_coached = []
         coached_sentences = []
         for el in elements:
             data = el.get('data', {})
-            # Check if the hovered coach is involved in this edge
-            if data.get('source', "") == hoverData['label'] or data.get('target', "") == hoverData['label']:
+            # Check if the clicked coach is involved in this edge
+            if data.get('source', "") == clickData['label'] or data.get('target', "") == clickData['label']:
                 # Determine role
-                is_source = data.get('source', "") == hoverData['label']
-                is_target = data.get('target', "") == hoverData['label']
+                is_source = data.get('source', "") == clickData['label']
+                is_target = data.get('target', "") == clickData['label']
                 team = data.get('team_of_connection')
                 for year in data.get('years_of_connection', []):
                     if year not in years_coached:
                         years_coached.append(year)
                         if is_source:
-                            coached_sentences.append(f"{hoverData['label']} coached for {team} as the {data['source_position']} in {year}")
+                            coached_sentences.append(f"{clickData['label']} coached for {team} as the {data['source_position']} in {year}")
                         if is_target:
-                            coached_sentences.append(f"{hoverData['label']} coached for {team} as the {data['target_position']} in {year}")
+                            coached_sentences.append(f"{clickData['label']} coached for {team} as the {data['target_position']} in {year}")
         coached_sentences.sort(key=lambda s: s.split()[-1], reverse=True)
-        return f"You are hovering over {hoverData['label']}", '\n'.join(coached_sentences)
+        return f"You clicked {clickData['label']}", '\n'.join(coached_sentences)
     else:
-        return "Hover over a node", "The teams a coach has worked for will be shown here"
+        return "Click a node", "The teams a coach has worked for will be shown here"
 
 if __name__ == '__main__':
     app.run(debug=True)
