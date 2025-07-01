@@ -249,7 +249,7 @@ def generate_graph(contents, filename, json_clicks):
         
         # Test code
         # After building elements
-        print(elements[2])
+        print(elements[2000])
         
         return elements, teams_list, years_list
     else:
@@ -438,6 +438,7 @@ def display_click_data(clickData, elements):
     
 @app.callback(
     Output('sub_graph', 'elements'),
+    Output('sub_graph', 'layout'),
     Input({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'n_clicks'),
     State({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'id'),
     State('main_graph', 'elements')
@@ -454,26 +455,61 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
             coach = btn_id['coach']
             valid_edges = []
             valid_nodes = []
+            
+            # First need to collect all encoded positions (solves issue of staff not having all levels listed)
+            encoded_pos_on_staff = set()
             for el in main_graph_elements:
                 data = el.get('data', {})
                 if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                    if data.get('source') == coach or data.get('target') == coach:
-                        valid_edges.append(el)
+                    encoded_pos1, encoded_pos2 = data.get('encoded_connection')
+                    encoded_pos_on_staff.add(encoded_pos1)
+                    encoded_pos_on_staff.add(encoded_pos2)
             
+            encoded_pos_on_staff = sorted(list(encoded_pos_on_staff))
+            print(encoded_pos_on_staff)
+
+            for el in main_graph_elements:
+                data = el.get('data', {})
+                if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
+                    source_encoded_pos, target_encoded_pos = data.get('encoded_connection')
+                    print(f"Source enc: {source_encoded_pos}")
+                    print(f"Target enc: {target_encoded_pos}")
+                    if source_encoded_pos == 1:
+                        head_coach = data.get('source')
+                    if target_encoded_pos == 1:
+                        head_coach = data.get('target')
+                    if (encoded_pos_on_staff.index(target_encoded_pos) - 1 == encoded_pos_on_staff.index(source_encoded_pos) or 
+                        encoded_pos_on_staff.index(target_encoded_pos) + 1 == encoded_pos_on_staff.index(source_encoded_pos)):
+                        valid_edges.append(el)
+                        print('Found valid edge')
+            
+            processed_coaches = []
             for edge in valid_edges:
                 edge_data = edge.get('data', {})
                 source_name = edge_data.get('source')
                 target_name = edge_data.get('target')
                 for el in main_graph_elements:
                     el_data = el.get('data', {})
-                    if el_data.get('label') == source_name or el_data.get('label') == target_name:
+                    # For source node
+                    if el_data.get('label') == source_name and el_data.get('label') not in processed_coaches:
+                        # If you want to add extra information here, use shallow copies to modify node info without
+                        # hurting main graph
+                        processed_coaches.append(el_data.get('label'))
                         valid_nodes.append(el)
-                    
+                        
+                    # For target node
+                    if el_data.get('label') == target_name and el_data.get('label') not in processed_coaches:
+                        processed_coaches.append(el_data.get('label'))
+                        valid_nodes.append(el)
             sub_graph_elements = valid_nodes + valid_edges             
 
+            layout = {
+                'name': 'breadthfirst',
+                'roots': f'[id = "{head_coach}"]'
+            }
+        
             
-            
-            return sub_graph_elements
+            return sub_graph_elements, layout
     return dash.no_update
 
 if __name__ == '__main__':
