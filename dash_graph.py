@@ -2,15 +2,15 @@ from basic_graph_generation import create_nx_graph
 import networkx as nx            
 import dash_cytoscape as cyto    
 import dash                      
-from dash import dcc, html
+from dash import dcc, html, callback_context
 import itertools
 
 import base64
 import io
 import pandas as pd
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output, State, ALL
 import json
-from dash import callback_context
+
 
 cyto.load_extra_layouts
 
@@ -34,6 +34,17 @@ def nx_to_cytoscape(G):
             elements.append({'data': edge_data})
     print(elements[2000])
 
+
+    # Test code
+    # After building elements
+    node_ids = {el['data']['id'] for el in elements if 'id' in el['data']}
+    for el in elements:
+        if 'source' in el['data']:
+            if el['data']['source'] not in node_ids:
+                print(f"Missing node for source: {el['data']['source']}")
+        if 'target' in el['data']:
+            if el['data']['target'] not in node_ids:
+                print(f"Missing node for target: {el['data']['target']}")
     return elements
 
 def generate_color(index, total):
@@ -91,7 +102,7 @@ app.layout = html.Div([
     ),
     html.Button("Load graph from JSON updated 6/26/25", id="JSON-direct-load-button", n_clicks=0),
     cyto.Cytoscape(
-        id='cytoscape',
+        id='main_graph',
         elements=[],  # Start empty
         layout={'name': 'circle'
                 },
@@ -149,16 +160,39 @@ app.layout = html.Div([
                 'border': 'thin lightgrey solid',
                 'overflowX': 'scroll'
             }),
-            html.Pre(id='coach-teams-click', style= {
-                'border': 'thin lightgrey solid',
-                'overflowX': 'scroll'
-            }),
+            html.Div(id='coach-teams-buttons'),
         ], className='three columns')
-    ])
+    ]),
+    cyto.Cytoscape(
+        id='sub_graph',
+        elements=[],  # Start empty
+        layout={'name': 'breadthfirst',
+                #'sort': 'encoded_position'
+                },
+
+        stylesheet=[
+            {'selector': 'node', 'style': {
+                'label': 'data(label)',
+                'height': 10,
+                'width': 10,
+                'font-size': 5,
+                'opacity': 1
+                }},
+
+            {'selector': 'edge', 'style': {
+                'line-color': '#aaa',
+                'curve-style': 'bezier',
+                'label': 'data(label)',
+                'width': 1,
+                'opacity': 1
+            }}
+        ],
+        style={'width': '100%', 'height': '600px'}
+    )
 ])
 
 @app.callback(
-    Output('cytoscape', 'elements'),
+    Output('main_graph', 'elements'),
     Output('team_select', 'options'),
     Output('year_select', 'options'),
     Input('upload-data', 'contents'),
@@ -212,6 +246,11 @@ def generate_graph(contents, filename, json_clicks):
                 years.add(years_of_connection)
         teams_list = ['All'] + sorted(teams, reverse=False)
         years_list = ['All'] + sorted(years, reverse=True)
+        
+        # Test code
+        # After building elements
+        print(elements[2])
+        
         return elements, teams_list, years_list
     else:
         return [], [], []
@@ -219,8 +258,8 @@ def generate_graph(contents, filename, json_clicks):
 @app.callback(
     Output('team_year_combo_display', 'children'),
     Output('team_year_combo_store', 'data'),
-    Output('cytoscape', 'layout'),
-    Output('cytoscape', 'stylesheet'),
+    Output('main_graph', 'layout'),
+    Output('main_graph', 'stylesheet'),
     Output('empty-parameter-warning', 'displayed'),
     Output('legend-container', 'children'),
     Output('all-all-warning', 'displayed'),
@@ -230,11 +269,11 @@ def generate_graph(contents, filename, json_clicks):
     State('team_year_combo_store', 'data'),
     State('team_select', 'value'),
     State('year_select', 'value'),
-    State('cytoscape', 'elements'),
+    State('main_graph', 'elements'),
     State('team_select', 'options'),
     State('year_select', 'options')
 )
-def unified_callback(
+def update_main_graph(
     combo_n_clicks, update_n_clicks, clear_n_clicks,
     current_selections, team_selection, year_selections,
     elements, team_options, year_options
@@ -359,14 +398,14 @@ def unified_callback(
 
 @app.callback(
     Output('coach-name-click', 'children'),
-    Output('coach-teams-click', 'children'),
-    Input('cytoscape', 'tapNodeData'),
-    Input('cytoscape', 'elements')
+    Output('coach-teams-buttons', 'children'),
+    Input('main_graph', 'tapNodeData'),
+    Input('main_graph', 'elements')
 )
 def display_click_data(clickData, elements):
     if clickData and 'label' in clickData:
         years_coached = []
-        coached_sentences = []
+        coached_info = []
         for el in elements:
             data = el.get('data', {})
             # Check if the clicked coach is involved in this edge
@@ -379,13 +418,63 @@ def display_click_data(clickData, elements):
                     if year not in years_coached:
                         years_coached.append(year)
                         if is_source:
-                            coached_sentences.append(f"{clickData['label']} coached for {team} as the {data['source_position']} in {year}")
+                            sentence = f"{clickData['label']} coached for {team} as the {data['source_position']} in {year}"
+                            coached_info.append((sentence, team, year))
                         if is_target:
-                            coached_sentences.append(f"{clickData['label']} coached for {team} as the {data['target_position']} in {year}")
-        coached_sentences.sort(key=lambda s: s.split()[-1], reverse=True)
-        return f"You clicked {clickData['label']}", '\n'.join(coached_sentences)
+                            sentence = f"{clickData['label']} coached for {team} as the {data['target_position']} in {year}"
+                            coached_info.append((sentence, team, year))
+        coached_info.sort(key=lambda tup: tup[2], reverse=True)
+
+        coached_buttons = [
+            html.Button(sentence, 
+                        id={'type': 'coach-btn', 'action': 'year-coach-tree', 'coach': clickData['label'], 'team': team, 'year': year}
+                        )
+                        for sentence, team, year in coached_info
+        ]
+            
+        return f"You clicked {clickData['label']}", coached_buttons
     else:
-        return "Click a node", "The teams a coach has worked for will be shown here"
+        return "Click a node", []
+    
+@app.callback(
+    Output('sub_graph', 'elements'),
+    Input({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'n_clicks'),
+    State({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'id'),
+    State('main_graph', 'elements')
+)
+def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update
+    for n_clicks, btn_id in zip(n_clicks_list, ids):
+        if n_clicks:
+            print("Message Heard!")
+            year = btn_id['year']
+            team = btn_id['team']
+            coach = btn_id['coach']
+            valid_edges = []
+            valid_nodes = []
+            for el in main_graph_elements:
+                data = el.get('data', {})
+                if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
+                    if data.get('source') == coach or data.get('target') == coach:
+                        valid_edges.append(el)
+            
+            for edge in valid_edges:
+                edge_data = edge.get('data', {})
+                source_name = edge_data.get('source')
+                target_name = edge_data.get('target')
+                for el in main_graph_elements:
+                    el_data = el.get('data', {})
+                    if el_data.get('label') == source_name or el_data.get('label') == target_name:
+                        valid_nodes.append(el)
+                    
+            sub_graph_elements = valid_nodes + valid_edges             
+
+            
+            
+            return sub_graph_elements
+    return dash.no_update
 
 if __name__ == '__main__':
     app.run(debug=True)
