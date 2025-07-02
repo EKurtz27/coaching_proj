@@ -16,8 +16,7 @@ cyto.load_extra_layouts
 
 def nx_to_cytoscape(G):
     elements = []
-    print(len(G.nodes))
-    print(len(G.edges))
+
     for node in G.nodes:
         elements.append({'data': {'id': str(node), 'label': str(node)}})
 
@@ -32,19 +31,9 @@ def nx_to_cytoscape(G):
                 **data
             }
             elements.append({'data': edge_data})
-    print(elements[2000])
+    
+    print(elements[2000]) # Debugging
 
-
-    # Test code
-    # After building elements
-    node_ids = {el['data']['id'] for el in elements if 'id' in el['data']}
-    for el in elements:
-        if 'source' in el['data']:
-            if el['data']['source'] not in node_ids:
-                print(f"Missing node for source: {el['data']['source']}")
-        if 'target' in el['data']:
-            if el['data']['target'] not in node_ids:
-                print(f"Missing node for target: {el['data']['target']}")
     return elements
 
 def generate_color(index, total):
@@ -69,6 +58,24 @@ default_stylesheet=[
         'opacity': .1
     }}
 ]
+
+subgraph_default_stylesheet=[
+            {'selector': 'node', 'style': {
+                'label': 'data(label)',
+                'height': 10,
+                'width': 10,
+                'font-size': 5,
+                'opacity': 1
+                }},
+
+            {'selector': 'edge', 'style': {
+                'line-color': '#aaa',
+                'curve-style': 'bezier',
+                'label': 'data(label)',
+                'width': 1,
+                'opacity': 1
+            }}
+        ]
 
 app = dash.Dash('Test Run')
 
@@ -107,23 +114,7 @@ app.layout = html.Div([
         layout={'name': 'circle'
                 },
 
-        stylesheet=[
-            {'selector': 'node', 'style': {
-                'label': 'data(label)',
-                'height': 10,
-                'width': 10,
-                'font-size': 5,
-                'opacity': 1
-                }},
-
-            {'selector': 'edge', 'style': {
-                'line-color': '#aaa',
-                'curve-style': 'bezier',
-                'label': 'data(label)',
-                'width': 1,
-                'opacity': .1
-            }}
-        ],
+        stylesheet= default_stylesheet,
         style={'width': '100%', 'height': '600px'}
     ),
     dcc.Dropdown(
@@ -170,23 +161,7 @@ app.layout = html.Div([
                 #'sort': 'encoded_position'
                 },
 
-        stylesheet=[
-            {'selector': 'node', 'style': {
-                'label': 'data(label)',
-                'height': 10,
-                'width': 10,
-                'font-size': 5,
-                'opacity': 1
-                }},
-
-            {'selector': 'edge', 'style': {
-                'line-color': '#aaa',
-                'curve-style': 'bezier',
-                'label': 'data(label)',
-                'width': 1,
-                'opacity': 1
-            }}
-        ],
+        stylesheet= subgraph_default_stylesheet,
         style={'width': '100%', 'height': '600px'}
     )
 ])
@@ -247,9 +222,7 @@ def generate_graph(contents, filename, json_clicks):
         teams_list = ['All'] + sorted(teams, reverse=False)
         years_list = ['All'] + sorted(years, reverse=True)
         
-        # Test code
-        # After building elements
-        print(elements[2000])
+        print(elements[2000]) # Debugging
         
         return elements, teams_list, years_list
     else:
@@ -439,6 +412,7 @@ def display_click_data(clickData, elements):
 @app.callback(
     Output('sub_graph', 'elements'),
     Output('sub_graph', 'layout'),
+    Output('sub_graph', 'stylesheet'),
     Input({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'n_clicks'),
     State({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'id'),
     State('main_graph', 'elements')
@@ -446,10 +420,10 @@ def display_click_data(clickData, elements):
 def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update
     for n_clicks, btn_id in zip(n_clicks_list, ids):
         if n_clicks:
-            print("Message Heard!")
+
             year = btn_id['year']
             team = btn_id['team']
             coach = btn_id['coach']
@@ -466,14 +440,12 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                     encoded_pos_on_staff.add(encoded_pos2)
             
             encoded_pos_on_staff = sorted(list(encoded_pos_on_staff))
-            print(encoded_pos_on_staff)
+
 
             for el in main_graph_elements:
                 data = el.get('data', {})
                 if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
                     source_encoded_pos, target_encoded_pos = data.get('encoded_connection')
-                    print(f"Source enc: {source_encoded_pos}")
-                    print(f"Target enc: {target_encoded_pos}")
                     if source_encoded_pos == 1:
                         head_coach = data.get('source')
                     if target_encoded_pos == 1:
@@ -481,7 +453,6 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                     if (encoded_pos_on_staff.index(target_encoded_pos) - 1 == encoded_pos_on_staff.index(source_encoded_pos) or 
                         encoded_pos_on_staff.index(target_encoded_pos) + 1 == encoded_pos_on_staff.index(source_encoded_pos)):
                         valid_edges.append(el)
-                        print('Found valid edge')
             
             processed_coaches = []
             for edge in valid_edges:
@@ -491,14 +462,14 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                 for el in main_graph_elements:
                     el_data = el.get('data', {})
                     # For source node
-                    if el_data.get('label') == source_name and el_data.get('label') not in processed_coaches:
+                    if el_data.get('label') == source_name and el_data.get('label'): #not in processed_coaches:
                         # If you want to add extra information here, use shallow copies to modify node info without
                         # hurting main graph
                         processed_coaches.append(el_data.get('label'))
                         valid_nodes.append(el)
                         
                     # For target node
-                    if el_data.get('label') == target_name and el_data.get('label') not in processed_coaches:
+                    if el_data.get('label') == target_name and el_data.get('label'): #not in processed_coaches:
                         processed_coaches.append(el_data.get('label'))
                         valid_nodes.append(el)
             sub_graph_elements = valid_nodes + valid_edges             
@@ -508,9 +479,13 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                 'roots': f'[id = "{head_coach}"]'
             }
         
+            hightlight_clicked_coach = [{
+                'selector': f'node[id = "{coach}"]',
+                    'style': {f'background-color': 'red', 'border-width': 1, 'border-color': 'black', 'opacity': 1}
+            }]
             
-            return sub_graph_elements, layout
-    return dash.no_update
+            return sub_graph_elements, layout, subgraph_default_stylesheet + hightlight_clicked_coach
+    return dash.no_update, dash.no_update, dash.no_update
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -42,7 +42,7 @@ if __name__ == "__main__":
         coach_jobs_df = pd.read_csv(coach_jobs_csv)
 
 def create_nx_graph(coach_jobs_df):    
-    coaching_graph = nx.DiGraph()
+    coaching_graph = nx.MultiDiGraph()
 
     position_encoding(coach_jobs_df)
 
@@ -69,37 +69,39 @@ def create_nx_graph(coach_jobs_df):
     target_position = {}
     visualization_tracker = {} # Having an edge for each direction is important for searching, but not vizualization. Reduces vizualized edges by half
     
-    duplicate_tracker = []
+    duplicate_tracker = set()
     for category, coach_grouping in grouped_coaches:
         for idx1, coach in coach_grouping.iterrows():
             for idx2, other_coach in coach_grouping.iterrows(): # This double loop method generates bidirectional connections automatically
                 if idx1 == idx2:
                     continue
                 else:
-                    duplicate_check = (coach['Name'], other_coach['Name'], coach['Team'])
-                    if duplicate_check not in duplicate_tracker and len(list((set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position']))))) > 0:    
-                        coaching_graph.add_edge(
+                    overlap_years = tuple(sorted(set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position']))))
+                    duplicate_check = (coach['Name'], other_coach['Name'], coach['Team'], overlap_years)
+                    if overlap_years and duplicate_check not in duplicate_tracker:
+                        edge_key = coaching_graph.add_edge(
                             coach["Name"],
                             other_coach["Name"],
-                            relationship=f"{coach['Position']} to {other_coach['Position']}"
+                            relationship=f"{coach['Position']} to {other_coach['Position']} on {coach['Team']}"
                         )
 
-                        duplicate_tracker.append(duplicate_check)
+                        duplicate_tracker.add(duplicate_check)
 
-                        encoded_connections[(coach['Name'], other_coach['Name'])] = (coach['Encoded Position'], other_coach['Encoded Position'])
-                        years_of_edges[(coach['Name'], other_coach['Name'])] = list(set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position'])))
-                        teams_of_edges[(coach['Name'], other_coach['Name'])] = coach['Team']
+                        encoded_connections[(coach['Name'], other_coach['Name'], edge_key)] = (coach['Encoded Position'], other_coach['Encoded Position'])
+                        years_of_edges[(coach['Name'], other_coach['Name'], edge_key)] = list(set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position'])))
+                        teams_of_edges[(coach['Name'], other_coach['Name'], edge_key)] = coach['Team']
                         indiv_mentor_status = "Not a Mentor"  # Was the coach at the end of the edge a mentor to the coach at the start of the edge
                         if other_coach['Encoded Position'] < coach['Encoded Position']:
                             indiv_mentor_status = "Mentor" # The coach was a distinct mentor
                         if other_coach['Encoded Position'] == coach['Encoded Position']:
                             indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
-                        mentor_status[(coach['Name'], other_coach['Name'])] = indiv_mentor_status
-                        source_position[(coach['Name'], other_coach['Name'])] = coach['Position']
-                        target_position[(coach['Name'], other_coach['Name'])] = other_coach['Position']
+                        mentor_status[(coach['Name'], other_coach['Name'], edge_key)] = indiv_mentor_status
+                        source_position[(coach['Name'], other_coach['Name'], edge_key)] = coach['Position']
+                        target_position[(coach['Name'], other_coach['Name'], edge_key)] = other_coach['Position']
                         if idx1 > idx2:
-                            visualization_tracker[(coach['Name'], other_coach['Name'])] = 0
-                        if idx1 < idx2: visualization_tracker[(coach['Name'], other_coach['Name'])] = 1
+                            visualization_tracker[(coach['Name'], other_coach['Name'], edge_key)] = 0
+                        if idx1 < idx2: 
+                            visualization_tracker[(coach['Name'], other_coach['Name'], edge_key)] = 1
 
     nx.set_edge_attributes(coaching_graph, encoded_connections, "encoded_connection")
     nx.set_edge_attributes(coaching_graph, years_of_edges, "years_of_connection")
@@ -242,24 +244,7 @@ def plotly_graph():
     fig.show()
 
 
-
-def save_grouped_coaches_to_csv(coach_jobs_df, output_path="grouped_coaches.csv"):
-    grouped_coaches = coach_jobs_df.groupby(by=["Starting Season", "Team"])
-    rows = []
-    for (season, team), group in grouped_coaches:
-        group_copy = group.copy()
-        group_copy["Grouped_Starting_Season"] = season
-        group_copy["Grouped_Team"] = team
-        rows.append(group_copy)
-    result_df = pd.concat(rows, ignore_index=True)
-    result_df.to_csv(output_path, index=False)
-    print(f"Grouped coaches saved to {output_path}")
-
 # Usage example:
 if __name__ == "__main__":
     plotly_graph()
 
-    input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
-    with open(f"{input_file_name}", "r") as coach_jobs_csv:
-        coach_jobs_df = pd.read_csv(coach_jobs_csv)
-    save_grouped_coaches_to_csv(coach_jobs_df)
