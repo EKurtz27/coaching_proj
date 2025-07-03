@@ -60,22 +60,22 @@ default_stylesheet=[
 ]
 
 subgraph_default_stylesheet=[
-            {'selector': 'node', 'style': {
-                'label': 'data(label)',
-                'height': 10,
-                'width': 10,
-                'font-size': 5,
-                'opacity': 1
-                }},
+    {'selector': 'node', 'style': {
+        'label': 'data(full_label)',
+        'height': 10,
+        'width': 10,
+        'font-size': 5,
+        'opacity': 1
+    }},
 
-            {'selector': 'edge', 'style': {
-                'line-color': '#aaa',
-                'curve-style': 'bezier',
-                'label': 'data(label)',
-                'width': 1,
-                'opacity': 1
-            }}
-        ]
+    {'selector': 'edge', 'style': {
+        'line-color': '#aaa',
+        'curve-style': 'bezier',
+        'label': 'data(label)',
+        'width': 1,
+        'opacity': 1
+    }}
+]
 
 app = dash.Dash('Test Run')
 
@@ -107,7 +107,7 @@ app.layout = html.Div([
         },
         multiple=False
     ),
-    html.Button("Load graph from JSON updated 6/26/25", id="JSON-direct-load-button", n_clicks=0),
+    html.Button("Load graph from JSON updated 7/2/25", id="JSON-direct-load-button", n_clicks=0),
     cyto.Cytoscape(
         id='main_graph',
         elements=[],  # Start empty
@@ -158,7 +158,6 @@ app.layout = html.Div([
         id='sub_graph',
         elements=[],  # Start empty
         layout={'name': 'breadthfirst',
-                #'sort': 'encoded_position'
                 },
 
         stylesheet= subgraph_default_stylesheet,
@@ -465,11 +464,17 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                     if el_data.get('label') == source_name and el_data.get('label'): #not in processed_coaches:
                         # If you want to add extra information here, use shallow copies to modify node info without
                         # hurting main graph
+                        node_copy = el.copy()
+                        copy_data = node_copy.get('data', {})
+                        copy_data['full_label'] = f"{copy_data.get('label', "")}: {edge_data.get('source_position')}"
                         processed_coaches.append(el_data.get('label'))
                         valid_nodes.append(el)
                         
                     # For target node
                     if el_data.get('label') == target_name and el_data.get('label'): #not in processed_coaches:
+                        node_copy = el.copy()
+                        copy_data = node_copy.get('data', {})
+                        copy_data['full_label'] = f"{copy_data.get('label', "")}: {edge_data.get('target_position')}"
                         processed_coaches.append(el_data.get('label'))
                         valid_nodes.append(el)
             sub_graph_elements = valid_nodes + valid_edges             
