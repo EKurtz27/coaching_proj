@@ -1,11 +1,9 @@
 import json
-from dash_graph import nx_to_cytoscape
 from basic_graph_generation import create_nx_graph
 import pandas as pd
-import networkx as nx
 
 # Load your data (adjust the path and filename as needed)
-df = pd.read_csv(r"data\clean_sorted_coach_jobs.csv")
+df = pd.read_csv("data/clean_sorted_coach_jobs.csv")
 G = create_nx_graph(df)
 
 def export_elements(G, full_elements):
@@ -51,7 +49,8 @@ def export_elements(G, full_elements):
 
 
 
-elements = export_elements(G, full_elements=True)
+elements = export_elements(G, full_elements=False)
 
-with open('full_elements_dump.json', 'w', encoding='utf-8') as f:
+# Be sure to change the file name! Recommended to swap between full_elements_dump and visualization_elements_dump
+with open('data/visualization_elements_dump.json', 'w', encoding='utf-8') as f:
     f.write(json.dumps(elements, ensure_ascii=False, indent=2))
