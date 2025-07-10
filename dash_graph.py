@@ -1,81 +1,10 @@
-from basic_graph_generation import create_nx_graph
-import networkx as nx            
+# Dash graph generation imports 
+from dash_graph_internals import *          
 import dash_cytoscape as cyto    
 import dash                      
 from dash import dcc, html, callback_context
-import itertools
-
-import base64
-import io
-import pandas as pd
 from dash.dependencies import Input, Output, State, ALL
-import json
-
-
-cyto.load_extra_layouts
-
-def nx_to_cytoscape(G):
-    elements = []
-
-    for node in G.nodes:
-        elements.append({'data': {'id': str(node), 'label': str(node)}})
-
-    for idx, (source, target, data) in enumerate(G.edges(data=True)):
-        # Only include edges where visualization_tracker == 1
-        # if data.get('visualization_tracker', 0) == 1:
-            edge_data = {
-                'id': f'edge-{idx}',
-                'description': f'{source} -> {target}',
-                'source': str(source),
-                'target': str(target),
-                **data
-            }
-            elements.append({'data': edge_data})
-    
-    print(elements[2000]) # Debugging
-
-    return elements
-
-def generate_color(index, total):
-    # Generates a color evenly spaced around the color wheel
-    hue = int(360 * index / total)
-    return f"hsl({hue}, 70%, 50%)"
-
-default_stylesheet=[
-    {'selector': 'node', 'style': {
-        'label': 'data(label)',
-        'height': 10,
-        'width': 10,
-        'font-size': 5,
-        'opacity': 1
-        }},
-
-    {'selector': 'edge', 'style': {
-        'line-color': '#aaa',
-        'curve-style': 'bezier',
-        'label': 'data(label)',
-        'width': 1,
-        'opacity': .1
-    }}
-]
-
-subgraph_default_stylesheet=[
-    {'selector': 'node', 'style': {
-        'label': 'data(full_label)',
-        'height': 10,
-        'width': 10,
-        'font-size': 5,
-        'opacity': 1
-    }},
-
-    {'selector': 'edge', 'style': {
-        'line-color': '#aaa',
-        'curve-style': 'bezier',
-        'label': 'data(label)',
-        'width': 1,
-        'opacity': 1
-    }}
-]
+import itertools
 
 app = dash.Dash('Test Run')
 
@@ -173,57 +102,37 @@ app.layout = html.Div([
     State('upload-data', 'filename'),
     Input('JSON-direct-load-button', 'n_clicks'),
 )
-def generate_graph(contents, filename, json_clicks):
+def generate_graph(contents, filename, _json_clicks):
+    """
+    Generates graph from either an uploaded CSV file or from a local JSON file, 
+    depending on user action.
+
+    Args:
+        contents (file contents): Data uploaded to the html.A 'Select a CSV File', will be decoded
+        filename (str): File name of file uploaded to the html.A
+        _json_clicks (int): Part of how Dash tracks when buttons have been clicked, unused but needed
+
+    Returns:
+        elements (list): List of JSON objects representing nodes and edges, 
+        given and read to create the main cytoscape graph 
+        teams_list (list): List of all unique teams found, given to the team selection dropdown
+        years_list (list): List of all unique years found, given to the year selection dropdown
+    """
     ctx = callback_context
     if not ctx.triggered:
         return [], [], []
-    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    trigger_id = get_id_of_triggered(ctx)
 
     if trigger_id == 'upload-data' and contents is not None:
         # CSV logic
-        content_type, content_string = contents.split(',')
-        decoded = base64.b64decode(content_string)
-        try:
-            if 'csv' in filename:
-                df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-                team_list = ['All'] + sorted(df['Team'].unique().tolist(), reverse=True)
-                years_list = set()
-                for _, row in df.iterrows():
-                    years_worked = row['Seasons at Position']
-                    if isinstance(years_worked, list):
-                        years_list.update(years_worked)
-                    elif years_worked:
-                        years_list.add(years_worked)
-                years_list = ['All'] + sorted(years_list, reverse=True)
-                G = create_nx_graph(df)
-                return nx_to_cytoscape(G), team_list, years_list
-            else:
-                return [], [], []
-        except Exception as e:
-            print(e)
-            return [], [], []
+        elements, teams_list, years_list = parse_csv_file(contents, filename)
+        return elements, teams_list, years_list
+    
     elif trigger_id == 'JSON-direct-load-button':
         # JSON logic
-        with open('visualization_elements_dump.json') as f:
-            elements = json.load(f)
-        teams = set()
-        years = set()
-        for el in elements:
-            data = el.get('data', {})
-            team = data.get('team_of_connection')
-            years_of_connection = data.get('years_of_connection')
-            if team:
-                teams.add(team)
-            if isinstance(years_of_connection, list):
-                years.update(years_of_connection)
-            elif years_of_connection:
-                years.add(years_of_connection)
-        teams_list = ['All'] + sorted(teams, reverse=False)
-        years_list = ['All'] + sorted(years, reverse=True)
-        
-        print(elements[2000]) # Debugging
-        
+        elements, teams_list, years_list = parse_json_file()
         return elements, teams_list, years_list
+    
     else:
         return [], [], []
 
@@ -246,127 +155,196 @@ def generate_graph(contents, filename, json_clicks):
     State('year_select', 'options')
 )
 def update_main_graph(
-    combo_n_clicks, update_n_clicks, clear_n_clicks,
-    current_selections, team_selection, year_selections,
+    combo_n_clicks, _update_n_clicks, _clear_n_clicks,
+    current_selected_combos, team_selection, year_selections,
     elements, team_options, year_options
-):
-    unselected_stylesheet = [
-        {'selector': 'node', 'style': {
-            'label': 'data(label)',
-            'height': 10,
-            'width': 10,
-            'font-size': 5,
-            'opacity': 0
-        }},
-        {'selector': 'edge', 'style': {
-            'line-color': '#aaa',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'width': 1,
-            'opacity': 0
-        }}
-    ]
+):   
+    """
+    Logic to handle all versions of updating the main graph interface, including adding
+    new (team, year) combinations, updating the graph based on selected combinations, and
+    clearing all parameters to reset the graph.
+
+    Args:
+        combo_n_clicks (int): How many times the 'Add combination' button has been selected. \
+            Required for callback_context tracking
+        _update_n_clicks (int): How many times the 'Update Parameters' button has been selected. \
+            Required for callback_context tracking
+        _clear_n_clicks: How many times the 'Clear Parameters' button has been selected. \
+            Required for callback_context tracking
+        current_selected_combos (list): List of currently selected combinations pulled from \
+            'team_year_combo_store'
+        team_selection (str): Current team selected in the team select dropdown
+        year_selections (list or str): Years currently being selected in the year select dropdown
+        elements (list): Elements from the main cytoscape graph (nodes + edges as JSON objects)
+        team_options (list): All values from the team selection dropdown. Needed to handle 'All' selection
+        year_options (list): All values from the year selection dropdown. Needed to handle 'All' selection
+
+    Returns:
+        Tuple[str, list, dict, dict, bool, list, bool]: A tuple containing:
+            - team_year_combo_display (str): String to be printed in html.Pre object of the same name. Lists all selected combinations
+            - team_year_combo_data (list): List of tuples to be stored in 'team_year_combo_store' and later pulled
+            - layout: Layout arguments to be passed to the main cytoscape graph
+            - stylesheet: Stylesheet arguments to be passed to the main cytoscape graph
+            - display_empty_param_warning (bool): Whether the empty parameter warning (dcc.ConfirmDialog) shoud be displayed
+            - legend: The color legend to be contained within 'legend-container'
+            - all_all_warning_display (bool): Whether the warning (dcc.ConfirmDialog) for selecting 'All' and 'All' should be displayed
+
+    ### Behavior
+
+    Clear Parameter Behavior:
+        Clear display and storage data, return to circle layout and default stylesheet, clear legend
     
+    Adding Combinations Behavior:
+        - If information is incomplete, don't update anything
+        - Else, turn selections into lists and iterate to produce combinations
+        - Combine new combinations with combinations in data storage
+        - Return updated display and data storage, no update to other returns
+
+    Update Button Behavior:
+        - Pull stored combinations, retuple for consistency
+        - Iterate through combinations
+            - Special behavior for 'All' selections, creates additional new combinations
+        - Generates selector arguments for the stylesheet and legend with 
+        :func:`dash_graph_internals.generate_legend_and_highlights`
+    """
     ctx = dash.callback_context
     if not ctx.triggered:
         # return all outputs as dash.no_update or empty
-        return "", [], dash.no_update, dash.no_update, False, None, False
+        team_year_combo_display = ""
+        team_year_combo_data = []
+        layout = dash.no_update
+        stylesheet = dash.no_update
+        display_empty_param_warning = False
+        legend = None
+        all_all_warning_display = False
+        
+        return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+            display_empty_param_warning, legend, all_all_warning_display
 
-    trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    trigger_id = get_id_of_triggered(ctx)
 
     # Handle clear
     if trigger_id == "clear_params":
-        return "", [], {'name': 'circle'}, default_stylesheet, False, None, False
+        team_year_combo_display = ""
+        team_year_combo_data = []
+        layout = {'name': 'circle'}
+        stylesheet = default_stylesheet
+        display_empty_param_warning = False
+        legend = None
+        all_all_warning_display = False
+        
+        return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+            display_empty_param_warning, legend, all_all_warning_display
 
-    # Handle combo button
+    # Handle triggering 'adding combinations' button
     if trigger_id == "team_year_combo_button":
+        # If information is incomplete
         if combo_n_clicks == 0 or team_selection is None or year_selections is None:
-            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, False, None, False
+            team_year_combo_display = dash.no_update
+            team_year_combo_data = dash.no_update
+            layout = dash.no_update
+            stylesheet = dash.no_update
+            display_empty_param_warning = False
+            legend = None
+            all_all_warning_display = False
+            
+            return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+            display_empty_param_warning, legend, all_all_warning_display
+        
+        # Turn single values into lists for consistent iteration
         if not isinstance(team_selection, list):
-            team_selection = [team_selection]
+            team_selection = [team_selection] 
         if not isinstance(year_selections, list):
             year_selections = [year_selections]
         new_team_year_combos = list(itertools.product(team_selection, year_selections))
-        if current_selections is None:
-            current_selections = []
-        # Convert everything to tuples, dcc.storage unpacks tuples when converting to JSON
-        current_selections = [tuple(x) for x in current_selections]
-        new_team_year_combos = [tuple(x) for x in new_team_year_combos]
-        team_year_combos = list(set(current_selections + new_team_year_combos))
-        combo_strings = [f"{team} - {year}" for team, year in team_year_combos]
-        return ", ".join(combo_strings), team_year_combos, dash.no_update, dash.no_update, False, None, False
-
-    # Handle update button (your update_graph logic here)
-    if trigger_id == "update_button":
-        highlight_styles = []
-
-        if current_selections == []:
-            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, True, dash.no_update, False
         
-        combinations = current_selections
-        for combo in current_selections:
+        if current_selected_combos is None:
+            current_selected_combos = []
+        # Convert everything to tuples for consistency
+        # dcc.storage unpacks tuples when converting to JSON
+        current_selected_combos = [tuple(x) for x in current_selected_combos]
+        new_team_year_combos = [tuple(x) for x in new_team_year_combos]
+        team_year_combos = list(set(current_selected_combos + new_team_year_combos))
+        combo_strings = [f"{team} - {year}" for team, year in team_year_combos]
+        
+        team_year_combo_display = ", ".join(combo_strings)
+        team_year_combo_data = team_year_combos
+        layout = dash.no_update
+        stylesheet = dash.no_update
+        display_empty_param_warning = False
+        legend = None
+        all_all_warning_display = False
+        return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+            display_empty_param_warning, legend, all_all_warning_display
+
+    # Handle update button
+    if trigger_id == "update_button":
+
+        if current_selected_combos == []:
+            team_year_combo_display = dash.no_update
+            team_year_combo_data = dash.no_update
+            layout = dash.no_update
+            stylesheet = dash.no_update
+            display_empty_param_warning = True
+            legend = dash.no_update
+            all_all_warning_display = False
+
+            return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+                display_empty_param_warning, legend, all_all_warning_display
+        
+        # Re-tuple again when pulling from storage for consistency
+        tupled_current_combos = [tuple(x) for x in current_selected_combos] 
+
+        for combo in tupled_current_combos:
             team, year = combo
             if team == "All" and year == "All":
-                return dash.no_update, dash.no_update, False, None, False, dash.no_update, True
-            elif team == "All":
-                combinations.extend([(t, year) for t in team_options[1:]])
-                combinations = [combo for combo in combinations if "All" not in combo]
-            elif year == "All":
-                combinations.extend([(team, y) for y in year_options[1:]])
-                combinations = [combo for combo in combinations if "All" not in combo]
-
-        combinations = [tuple(x) for x in combinations] # Re-tuple again when pulling from storage
-        combinations = list(set(combinations))
-        total = len(combinations)
-
-        legend_items = []
-        for i, team_tuple in enumerate(combinations):
-            color = generate_color(i, total)
-            highlighted_edges = set()
-            highlighted_nodes = set()
-            team, year = team_tuple
+                team_year_combo_display = dash.no_update
+                team_year_combo_data = dash.no_update
+                layout = dash.no_update
+                stylesheet = dash.no_update
+                display_empty_param_warning = False
+                legend = dash.no_update
+                all_all_warning_display = True
+                
+                return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+                    display_empty_param_warning, legend, all_all_warning_display
             
-            # Find connected nodes
-            for el in elements:
-                data = el.get('data', {})
-                if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                    highlighted_edges.add(data.get('id'))
-                    highlighted_nodes.add(data.get('source'))
-                    highlighted_nodes.add(data.get('target'))
-            # Highlight edges
-            for edge_id in highlighted_edges:
-                highlight_styles.append({
-                'selector': f'[id = "{edge_id}"]',
-                'style': {'line-color': color, 'opacity': 1},
-            })
-            # Highlight nodes
-            for node_id in highlighted_nodes:
-                highlight_styles.append({
-                    'selector': f'node[id = "{node_id}"]',
-                    'style': {f'background-color': color, 'border-width': 1, 'border-color': 'black', 'opacity': 1}
-                })
+            elif team == "All":
+                tupled_current_combos = handle_all_selection(team_options, year, "team")
+            
+            elif year == "All":
+                tupled_current_combos = handle_all_selection(year_options, team, "year")
 
-            legend_items.append(
-                html.Div([
-                    html.Span(style={
-                        'display': 'inline-block',
-                        'width': '20px',
-                        'height': '20px',
-                        'backgroundColor': color,
-                        'marginRight': '10px',
-                        'border': '1px solid #333'
-                    }),
-                    f"{team} - {year}"
-                ], style={'marginBottom': '5px'})
-            )
+        final_combo_list = list(set(tupled_current_combos))
 
-        legend = html.Div(legend_items, style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
-        layout = {'name': 'random'}
+        highlight_styles, legend_items = generate_legend_and_highlights(final_combo_list, elements)
+
+
         
-        return dash.no_update, dash.no_update, layout, unselected_stylesheet + highlight_styles, False, legend, False
+        team_year_combo_display = dash.no_update
+        team_year_combo_data = dash.no_update
+        layout = {'name': 'random'}
+        stylesheet = unselected_stylesheet + highlight_styles
+        display_empty_param_warning = False
+        legend = html.Div(legend_items, 
+                          style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
+        all_all_warning_display = False
+        
+        
+        return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+                display_empty_param_warning, legend, all_all_warning_display
     
     else:
-        return dash.no_update, dash.no_update, False, None, False, dash.no_update, False
+        team_year_combo_display = dash.no_update
+        team_year_combo_data = dash.no_update
+        layout = dash.no_update
+        stylesheet = dash.no_update
+        display_empty_param_warning = False
+        legend = dash.no_update
+        all_all_warning_display = False
+        
+        return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+        display_empty_param_warning, legend, all_all_warning_display
 
 @app.callback(
     Output('coach-name-click', 'children'),
@@ -375,36 +353,19 @@ def update_main_graph(
     Input('main_graph', 'elements')
 )
 def display_click_data(clickData, elements):
-    if clickData and 'label' in clickData:
-        years_coached = []
-        coached_info = []
-        for el in elements:
-            data = el.get('data', {})
-            # Check if the clicked coach is involved in this edge
-            if data.get('source', "") == clickData['label'] or data.get('target', "") == clickData['label']:
-                # Determine role
-                is_source = data.get('source', "") == clickData['label']
-                is_target = data.get('target', "") == clickData['label']
-                team = data.get('team_of_connection')
-                for year in data.get('years_of_connection', []):
-                    if year not in years_coached:
-                        years_coached.append(year)
-                        if is_source:
-                            sentence = f"{clickData['label']} coached for {team} as the {data['source_position']} in {year}"
-                            coached_info.append((sentence, team, year))
-                        if is_target:
-                            sentence = f"{clickData['label']} coached for {team} as the {data['target_position']} in {year}"
-                            coached_info.append((sentence, team, year))
-        coached_info.sort(key=lambda tup: tup[2], reverse=True)
+    if clickData and 'id' in clickData: # id check ensures user clicked a node, not an edge
+        clicked_coach = clickData['coach_name']
+        coach_employment_history = gather_coaching_positions(elements, clicked_coach)
 
         coached_buttons = [
             html.Button(sentence, 
-                        id={'type': 'coach-btn', 'action': 'year-coach-tree', 'coach': clickData['label'], 'team': team, 'year': year}
+                        id={'type': 'coach-btn', 'action': 'year-coach-tree', 'coach': clicked_coach, 'team': team, 'year': year}
                         )
-                        for sentence, team, year in coached_info
+                        for sentence, team, year in coach_employment_history
         ]
             
-        return f"You clicked {clickData['label']}", coached_buttons
+        return f"You clicked {clicked_coach}", coached_buttons
+    
     else:
         return "Click a node", []
     
@@ -419,67 +380,24 @@ def display_click_data(clickData, elements):
 def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return dash.no_update, dash.no_update, dash.no_update
+        subgraph_elements = dash.no_update
+        subgraph_layout = dash.no_update
+        subgraph_stylesheet = dash.no_update
+
+        return subgraph_elements, subgraph_layout, subgraph_stylesheet
     for n_clicks, btn_id in zip(n_clicks_list, ids):
         if n_clicks:
 
             year = btn_id['year']
             team = btn_id['team']
             coach = btn_id['coach']
-            valid_edges = []
-            valid_nodes = []
             
             # First need to collect all encoded positions (solves issue of staff not having all levels listed)
-            encoded_pos_on_staff = set()
-            for el in main_graph_elements:
-                data = el.get('data', {})
-                if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                    encoded_pos1, encoded_pos2 = data.get('encoded_connection')
-                    encoded_pos_on_staff.add(encoded_pos1)
-                    encoded_pos_on_staff.add(encoded_pos2)
-            
-            encoded_pos_on_staff = sorted(list(encoded_pos_on_staff))
+            encoded_pos_on_staff = find_encoded_levels_on_staff(main_graph_elements, team, year)
 
+            subgraph_elements, head_coach = create_bfs_graph_structure(main_graph_elements, encoded_pos_on_staff, team, year)         
 
-            for el in main_graph_elements:
-                data = el.get('data', {})
-                if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                    source_encoded_pos, target_encoded_pos = data.get('encoded_connection')
-                    if source_encoded_pos == 1:
-                        head_coach = data.get('source')
-                    if target_encoded_pos == 1:
-                        head_coach = data.get('target')
-                    if (encoded_pos_on_staff.index(target_encoded_pos) - 1 == encoded_pos_on_staff.index(source_encoded_pos) or 
-                        encoded_pos_on_staff.index(target_encoded_pos) + 1 == encoded_pos_on_staff.index(source_encoded_pos)):
-                        valid_edges.append(el)
-            
-            processed_coaches = []
-            for edge in valid_edges:
-                edge_data = edge.get('data', {})
-                source_name = edge_data.get('source')
-                target_name = edge_data.get('target')
-                for el in main_graph_elements:
-                    el_data = el.get('data', {})
-                    # For source node
-                    if el_data.get('label') == source_name and el_data.get('label'): #not in processed_coaches:
-                        # If you want to add extra information here, use shallow copies to modify node info without
-                        # hurting main graph
-                        node_copy = el.copy()
-                        copy_data = node_copy.get('data', {})
-                        copy_data['full_label'] = f"{copy_data.get('label', "")}: {edge_data.get('source_position')}"
-                        processed_coaches.append(el_data.get('label'))
-                        valid_nodes.append(el)
-                        
-                    # For target node
-                    if el_data.get('label') == target_name and el_data.get('label'): #not in processed_coaches:
-                        node_copy = el.copy()
-                        copy_data = node_copy.get('data', {})
-                        copy_data['full_label'] = f"{copy_data.get('label', "")}: {edge_data.get('target_position')}"
-                        processed_coaches.append(el_data.get('label'))
-                        valid_nodes.append(el)
-            sub_graph_elements = valid_nodes + valid_edges             
-
-            layout = {
+            subgraph_layout = {
                 'name': 'breadthfirst',
                 'roots': f'[id = "{head_coach}"]'
             }
@@ -489,7 +407,9 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
                     'style': {f'background-color': 'red', 'border-width': 1, 'border-color': 'black', 'opacity': 1}
             }]
             
-            return sub_graph_elements, layout, subgraph_default_stylesheet + hightlight_clicked_coach
+            subgraph_stylesheet = subgraph_default_stylesheet + hightlight_clicked_coach
+
+            return subgraph_elements, subgraph_layout, subgraph_stylesheet
     return dash.no_update, dash.no_update, dash.no_update
 
 if __name__ == '__main__':
