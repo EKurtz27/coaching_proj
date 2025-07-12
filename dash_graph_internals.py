@@ -1,5 +1,5 @@
 if __name__ == '__main__':
-    print("Error: you are running a useless file, please run 'dash_graph.py' to generate the webpage")
+    print("Error: you are running a file of function definitions, please run 'dash_graph.py' to generate the webpage")
 
 def nx_to_cytoscape(G):
     """
@@ -138,7 +138,7 @@ def parse_json_file():
     """
     import json
 
-    with open('visualization_elements_dump.json') as f:
+    with open('data/visualization_elements_dump.json') as f:
         elements = json.load(f)
         teams = set()
         years = set()
@@ -203,53 +203,114 @@ def gather_coaching_positions(elements: list, coach: str) -> list:
 
     return coached_info
 
-def handle_all_selection(possible_values: list, constant_value, team_or_year: str) -> list:
+def handle_all_selection(current_combos: list, possible_values: list, constant_value, team_or_year: str) -> list:
     """
     Handles iterating through lists to create all new combinations when user selects 'All'. 
     Removes combinations containing 'All' 
     """
     if team_or_year == 'team':
-        tupled_current_combos.extend([(t, constant_value) for t in possible_values[1:]])
-        tupled_current_combos = [combo for combo in tupled_current_combos if "All" not in combo] # Remove initial All
+        current_combos.extend([(t, constant_value) for t in possible_values[1:]])
+        current_combos = [combo for combo in current_combos if "All" not in combo] # Remove initial All
 
     if team_or_year == 'year':
-        tupled_current_combos.extend([(constant_value, y) for y in possible_values[1:]])
-        tupled_current_combos = [combo for combo in tupled_current_combos if "All" not in combo] # Remove initial All
+        current_combos.extend([(constant_value, y) for y in possible_values[1:]])
+        current_combos = [combo for combo in current_combos if "All" not in combo] # Remove initial All
 
-    return tupled_current_combos
+    return current_combos
 
-def generate_legend_items(combo_list: list, cytoscape_elements: list):
-    from dash import html
+def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
+    """
+    Iterates through combinations, finding relevant edges and nodes. Generates a legend for all combinations
+
+    Args:
+        combo_list (list): list of all submitted combinations of (team, year) to be analyzed
+        cytoscape_elements (list): list of elements from the main cytoscape (all possible data) 
+        to be searched through for valid edges and nodes
     
-    legend_items = []
-    highlight_styles = []
-    total_combos = len(combo_list)
-    for i, team_tuple in enumerate(combo_list):
-        color = generate_color(i, total_combos)
-        highlighted_edges = set()
-        highlighted_nodes = set()
-        team, year = team_tuple
-        
+    Returns:
+        highlight_styles (list): list of additional selector arguments to be passed to the stylesheet.
+        This is what allows for nodes and edges to change colors
+        legend_items (list): list of html Span objects that display the color legend for the provided combinations
+
+    Behavior:
+        - For each combination:
+            - Finds relevant nodes and edges from the main elements list
+            - Adds these to intermediate lists
+            - Adds these intermediate lists as a value to a dict with (team, year) as the key
+        - With all relevant information stored in the dict, iterates through the dict values and:
+            - Generates a HSL color for the combination using :func:`generate_color`
+            - Highlights each node and edge by adding selector arguments to `highlight_styles`, includes the created HSL color
+            - Generates a legend item to be displayed that correlated each combination to its color
+
+    """
+    from dash import html
+    from itertools import chain
+
+    all_highlighted_edges = {}
+    all_highlighted_nodes = {}
+    for team, year in combo_list:
+        team_highlighted_edges = set()
+        team_highlighted_nodes = set()
         # Find connected nodes
         for el in cytoscape_elements:
             data = el.get('data', {})
             # Search through edges
             if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                highlighted_edges.add(data.get('id'))
-                highlighted_nodes.add(data.get('source'))
-                highlighted_nodes.add(data.get('target'))
-        # Highlight edges
-        for edge_id in highlighted_edges:
-            highlight_styles.append({
-            'selector': f'[id = "{edge_id}"]',
-            'style': {'line-color': color, 'opacity': 1},
-        })
+                team_highlighted_edges.add(( data.get('id'), data.get('source'), data.get('target') ))
+                team_highlighted_nodes.add(data.get('source'))
+                team_highlighted_nodes.add(data.get('target'))
+
+        if team_highlighted_edges:
+            all_highlighted_edges[(team, year)] = team_highlighted_edges
+            all_highlighted_nodes[(team, year)] = team_highlighted_nodes
+
+    total_combos = len(all_highlighted_edges.keys())
+    legend_items = []
+    highlight_styles = []
+    all_parallel_edges = []
+    for idx, dict_info in enumerate(all_highlighted_edges.items()): # This logic handles 'All' selections w/o making a color for teams w/o valid edges
+        color = generate_color(idx, total_combos)
+        combo, edge_info_list = dict_info
+        team, year = combo
+       
         # Highlight nodes
-        for coach_name in highlighted_nodes:
+        for coach_name in all_highlighted_nodes[combo]:
             highlight_styles.append({
                 'selector': f'node[id = "{coach_name}"]',
-                'style': {f'background-color': color, 'border-width': 1, 'border-color': 'black', 'opacity': 1}
+                'style': {f'background-color': 'white', 'border-width': 1, 'border-color': 'black', 'opacity': 1}
             })
+        
+        for edge_info in edge_info_list:
+            edge_id, source_coach, target_coach = edge_info
+            # Highlight edges
+            highlight_styles.append({
+                'selector': f'[id = "{edge_id}"]',
+                'style': {'line-color': color, 'opacity': 1},
+            })
+            parallel_edges = []
+            parallel_edges.append(edge_id)
+            # Search all other edges
+            for edge_info in chain(*all_highlighted_edges.values()):
+            # Identify if coaches are the same (check reverse order)
+                edge_id2, source_coach2, target_coach2 = edge_info
+                if edge_id == edge_id2:
+                    continue
+                elif ((source_coach == source_coach2 and target_coach == target_coach2)
+                    or (source_coach == target_coach2 and target_coach == source_coach2)):    
+            # Log edge ids into a list
+                    parallel_edges.append(edge_id2)
+            # Log the list into a list of lists
+            if len(parallel_edges) >= 2:
+                all_parallel_edges.append(parallel_edges)
+            
+            
+            # Use list of lists to group overlaps together and apply bezier curve to them
+            # This does not work because every edge represents a coach's entire tenure with the connection. There are not mulitple edges
+            # that overlap. I will likely need to rework graph updating to make a new graph instead of hiding other nodes (booooo)
+    
+
+
+                
 
         legend_items.append(
             html.Div([
@@ -265,6 +326,120 @@ def generate_legend_items(combo_list: list, cytoscape_elements: list):
             ], style={'marginBottom': '5px'})
         )
 
+    for grouped_parallel_edges in all_parallel_edges:
+        selector = ', '.join(f'edge[id = "{edge_id}"]' for edge_id in grouped_parallel_edges)
+        highlight_styles.append({
+            'selector': selector,
+            'style': {'curve-style': 'bezier'}
+        })
+
+    return highlight_styles, legend_items
+
+def find_encoded_levels_on_staff(main_elements: list, team: str, year: int) -> list:
+    """
+    Finds all encoded positions on the current staff. Handles the staff not having continous values
+    (ex: 1,2,5) by allowing comparison by index location instead of raw value
+
+    Args:
+        main_elements (list): elements from the main cytoscape
+        team (str): team selected for analysis
+        year (int): year selected for analysis
+
+    Returns:
+        encoded_pos_list (list): a sorted list of all encoded positions on the staff
+
+    Behavior:
+        - Search through main cytoscape elements to find relevant edges
+        - Pull out encoded positions from the edge data and add to a set
+        - Turn the set into a list and sort it
+    """
+    encoded_pos_list = set()
+    for el in main_elements:
+        data = el.get('data', {})
+        if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
+            encoded_pos1, encoded_pos2 = data.get('encoded_connection')
+            encoded_pos_list.add(encoded_pos1)
+            encoded_pos_list.add(encoded_pos2)
+    
+    encoded_pos_list = sorted(list(encoded_pos_list))
+    return encoded_pos_list
+
+def create_bfs_graph_structure(cytoscape_elements: list, encoded_pos_list: list, team: str, year: int) -> list:
+    """
+    Creates a list of elements that allows the BFS layout style to correctly show a coaching staff 
+    hierarchy tree in the subgraph.
+
+    Args:
+        cytoscape_elements (list): A list of all elements from the main cytoscape (all possible data)
+        encoded_pos_list (list): A list of all available encoded positions on the current staff. 
+        For more information see :func:`find_encoded_levels_on_staff`
+        team (str): team being analyzed
+        year (int): year being analyzed
+
+    Returns:
+        sub_graph_elements (list): A list of elements that allow the graph to form properly
+        head_coach (str): Name of the staff's head coach, so the root of the graph is set correctly
+
+    Behavior:
+        - Iterates through all elements, first checking if the edge data is for the same team and year
+            - If so, tries to see if it lists the head coach (encoded position of 1)
+            - If the coaches are an index distance of 1 from each other (ex: 2 and 4 in a list of [1,2,4]),
+            adds this edge to valid edges. This is what lets a BFS form the hierarchical structure desired
+        - For each valid edge:
+            - Iterates through all elements to find nodes that match edge source and target (tracks and skips duplicates)
+            - Copies data from main element list
+            - Adds new information to the copy, a longer to be displayed in the subgraph
+            - Adds this copy to the valid nodes list
+        - Combines valid_nodes and valid_edges
+
+    Notes:
+    - Iterating through the main element list and copying node data is not needed, you could easily create new node
+    information and add it. However, this loop was designed to make you only need to add new information to the nodes
+    during initial creation.
+    """
+    valid_nodes = []
+    valid_edges = []
+    
+    for el in cytoscape_elements:
+        data = el.get('data', {})
+        if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
+            source_encoded_pos, target_encoded_pos = data.get('encoded_connection')
+            if source_encoded_pos == 1:
+                head_coach = data.get('source')
+            if target_encoded_pos == 1:
+                head_coach = data.get('target')
+            if (encoded_pos_list.index(target_encoded_pos) - 1 == encoded_pos_list.index(source_encoded_pos) or 
+                encoded_pos_list.index(target_encoded_pos) + 1 == encoded_pos_list.index(source_encoded_pos)):
+                valid_edges.append(el)
+    
+    processed_coaches = []
+    for edge in valid_edges:
+        edge_data = edge.get('data', {})
+        source_name = edge_data.get('source')
+        target_name = edge_data.get('target')
+        for el in cytoscape_elements:
+            el_data = el.get('data', {})
+            # For source node
+            if el_data.get('coach_name') == source_name and el_data.get('coach_name'): #not in processed_coaches:
+                # If you want to add extra information here, use shallow copies to modify node info without
+                # hurting main graph
+                node_copy = el.copy()
+                copy_data = node_copy.get('data', {})
+                copy_data['subgraph_label'] = f"{copy_data.get('coach_name', "")}: {edge_data.get('source_position')}"
+                processed_coaches.append(el_data.get('coach_name'))
+                valid_nodes.append(el)
+                
+            # For target node
+            if el_data.get('coach_name') == target_name and el_data.get('coach_name'): #not in processed_coaches:
+                node_copy = el.copy()
+                copy_data = node_copy.get('data', {})
+                copy_data['subgraph_label'] = f"{copy_data.get('coach_name', "")}: {edge_data.get('target_position')}"
+                processed_coaches.append(el_data.get('coach_name'))
+                valid_nodes.append(el)
+    sub_graph_elements = valid_nodes + valid_edges  
+
+    return sub_graph_elements, head_coach
+
 default_stylesheet=[
     {'selector': 'node', 'style': {
         'label': 'data(coach_name)',
@@ -279,6 +454,22 @@ default_stylesheet=[
         'curve-style': 'bezier',
         'width': 1,
         'opacity': .1
+    }}
+]
+
+unselected_stylesheet = [
+    {'selector': 'node', 'style': {
+        'label': 'data(coach_name)',
+        'height': 10,
+        'width': 10,
+        'font-size': 5,
+        'opacity': 0
+    }},
+    {'selector': 'edge', 'style': {
+        'line-color': '#aaa',
+        'curve-style': 'bezier',
+        'width': 1,
+        'opacity': 0
     }}
 ]
 
