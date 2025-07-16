@@ -15,8 +15,8 @@ def nx_to_cytoscape(G):
 
         Node values include the following information::
             {'data': {
-                'coach_name': 'coach name',
-                'test': 'test'
+                'id': 'coach_name', (id is a required attribute for nodes and edges)
+                'coach_name': 'coach_name'
             }}
             
         Edge values include the following information::
@@ -245,9 +245,12 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
     """
     from dash import html
     from itertools import chain
+    from copy import deepcopy
 
     all_highlighted_edges = {}
     all_highlighted_nodes = {}
+    new_elements_list = []
+    new_elements_id_counter = len(cytoscape_elements) + 2
     for team, year in combo_list:
         team_highlighted_edges = set()
         team_highlighted_nodes = set()
@@ -256,18 +259,31 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
             data = el.get('data', {})
             # Search through edges
             if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
-                team_highlighted_edges.add(( data.get('id'), data.get('source'), data.get('target') ))
                 team_highlighted_nodes.add(data.get('source'))
                 team_highlighted_nodes.add(data.get('target'))
+                edge_copy = deepcopy(el) # Deepcopy to be able to change id (allow parallel edges to exist for same job over multiple years)
+                edge_copy_data = edge_copy.get('data', {})
+                edge_copy_data['id'] = f"edge-{new_elements_id_counter}"
+                new_elements_id_counter += 1
+                team_highlighted_edges.add(( edge_copy_data.get('id'), edge_copy_data.get('source'), edge_copy_data.get('target') ))
+                new_elements_list.append(edge_copy)
 
         if team_highlighted_edges:
             all_highlighted_edges[(team, year)] = team_highlighted_edges
             all_highlighted_nodes[(team, year)] = team_highlighted_nodes
 
+    for coach_name in chain(*all_highlighted_nodes.values()):
+        for el in cytoscape_elements:
+            data = el.get('data', {})
+            if data.get('coach_name') == coach_name:
+                node_copy = deepcopy(el)
+                new_elements_list.append(node_copy) # Consider adding a class attribute here, then doing color by class (would require a deep copy)
+
     total_combos = len(all_highlighted_edges.keys())
     legend_items = []
     highlight_styles = []
-    all_parallel_edges = []
+    all_parallel_edges = set()
+
     for idx, dict_info in enumerate(all_highlighted_edges.items()): # This logic handles 'All' selections w/o making a color for teams w/o valid edges
         color = generate_color(idx, total_combos)
         combo, edge_info_list = dict_info
@@ -299,9 +315,11 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
                     or (source_coach == target_coach2 and target_coach == source_coach2)):    
             # Log edge ids into a list
                     parallel_edges.append(edge_id2)
+                    parallel_edges.sort()
+                    parallel_edges = tuple(parallel_edges)
             # Log the list into a list of lists
             if len(parallel_edges) >= 2:
-                all_parallel_edges.append(parallel_edges)
+                all_parallel_edges.add(parallel_edges)
             
             
             # Use list of lists to group overlaps together and apply bezier curve to them
@@ -327,13 +345,16 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
         )
 
     for grouped_parallel_edges in all_parallel_edges:
-        selector = ', '.join(f'edge[id = "{edge_id}"]' for edge_id in grouped_parallel_edges)
+        selector = ', '.join(f'[id = "{edge_id}"]' for edge_id in grouped_parallel_edges)
         highlight_styles.append({
             'selector': selector,
             'style': {'curve-style': 'bezier'}
         })
 
-    return highlight_styles, legend_items
+    print(f"Returning elements: {len(new_elements_list)}")
+    print(f"Returning styles: {len(highlight_styles)}")
+    
+    return list(new_elements_list), list(highlight_styles), list(legend_items)
 
 def find_encoded_levels_on_staff(main_elements: list, team: str, year: int) -> list:
     """
