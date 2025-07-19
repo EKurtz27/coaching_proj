@@ -5,8 +5,10 @@ import dash
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State, ALL
 import itertools
+cyto.load_extra_layouts()
 
 app = dash.Dash('Test Run')
+
 
 app.layout = html.Div([
     dcc.ConfirmDialog(
@@ -38,13 +40,13 @@ app.layout = html.Div([
     ),
     html.Button("Load graph from JSON updated 7/2/25", id="JSON-direct-load-button", n_clicks=0),
     cyto.Cytoscape(
-        id='main_graph',
-        elements=[],  # Start empty
-        layout={'name': 'circle'
-                },
+    id='main_graph',
+    elements=[],  # Start empty
+    layout={'name': 'circle'
+            },
 
-        stylesheet= default_stylesheet,
-        style={'width': '100%', 'height': '600px'}
+    stylesheet= default_stylesheet,
+    style={'width': '100%', 'height': '600px'}
     ),
     dcc.Dropdown(
         options= [],
@@ -68,6 +70,8 @@ app.layout = html.Div([
     dcc.Store(id='team_year_combo_store', storage_type='session'),
     html.Button("Update Parameters", id='update_button', n_clicks=0),
     html.Button("Clear Parameters", id='clear_params', n_clicks=0),
+    html.P("Due to an unresolved Dash bug, please press 'Update Parameters' a second time after the first update \
+           to fully update the graph"),
     html.Div(id='legend-container'),
     html.Div(className='row', children=[
         html.Div([
@@ -114,7 +118,7 @@ def generate_graph(contents, filename, _json_clicks):
 
     Returns:
         elements (list): List of JSON objects representing nodes and edges, 
-        given and read to create the main cytoscape graph 
+        given and read to create the main cytoscape graph
         teams_list (list): List of all unique teams found, given to the team selection dropdown
         years_list (list): List of all unique years found, given to the year selection dropdown
     """
@@ -141,6 +145,7 @@ def generate_graph(contents, filename, _json_clicks):
     Output('team_year_combo_store', 'data'),
     Output('main_graph', 'layout'),
     Output('main_graph', 'stylesheet'),
+    Output('main_graph', 'elements', allow_duplicate=True),
     Output('empty-parameter-warning', 'displayed'),
     Output('legend-container', 'children'),
     Output('all-all-warning', 'displayed'),
@@ -152,12 +157,13 @@ def generate_graph(contents, filename, _json_clicks):
     State('year_select', 'value'),
     State('main_graph', 'elements'),
     State('team_select', 'options'),
-    State('year_select', 'options')
+    State('year_select', 'options'),
+    prevent_initial_call=True
 )
 def update_main_graph(
     combo_n_clicks, _update_n_clicks, _clear_n_clicks,
     current_selected_combos, team_selection, year_selections,
-    elements, team_options, year_options
+    current_elements, team_options, year_options
 ):   
     """
     Logic to handle all versions of updating the main graph interface, including adding
@@ -179,7 +185,7 @@ def update_main_graph(
         team_options (list): All values from the team selection dropdown. Needed to handle 'All' selection
         year_options (list): All values from the year selection dropdown. Needed to handle 'All' selection
 
-    Returns:
+    Returns
         Tuple[str, list, dict, dict, bool, list, bool]: A tuple containing:
             - team_year_combo_display (str): String to be printed in html.Pre object of the same name. Lists all selected combinations
             - team_year_combo_data (list): List of tuples to be stored in 'team_year_combo_store' and later pulled
@@ -208,18 +214,22 @@ def update_main_graph(
         :func:`dash_graph_internals.generate_legend_and_highlights`
     """
     ctx = dash.callback_context
+    
+    full_elements_list, _, _ = parse_json_file()
+    
     if not ctx.triggered:
         # return all outputs as dash.no_update or empty
         team_year_combo_display = ""
         team_year_combo_data = []
         layout = dash.no_update
         stylesheet = dash.no_update
+        new_elements = current_elements
         display_empty_param_warning = False
         legend = None
         all_all_warning_display = False
         
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-            display_empty_param_warning, legend, all_all_warning_display
+            new_elements, display_empty_param_warning, legend, all_all_warning_display
 
     trigger_id = get_id_of_triggered(ctx)
 
@@ -229,12 +239,13 @@ def update_main_graph(
         team_year_combo_data = []
         layout = {'name': 'circle'}
         stylesheet = default_stylesheet
+        new_elements = full_elements_list
         display_empty_param_warning = False
         legend = None
         all_all_warning_display = False
         
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-            display_empty_param_warning, legend, all_all_warning_display
+            new_elements, display_empty_param_warning, legend, all_all_warning_display
 
     # Handle triggering 'adding combinations' button
     if trigger_id == "team_year_combo_button":
@@ -244,12 +255,13 @@ def update_main_graph(
             team_year_combo_data = dash.no_update
             layout = dash.no_update
             stylesheet = dash.no_update
+            new_elements = current_elements
             display_empty_param_warning = False
             legend = None
             all_all_warning_display = False
             
             return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-            display_empty_param_warning, legend, all_all_warning_display
+            new_elements, display_empty_param_warning, legend, all_all_warning_display
         
         # Turn single values into lists for consistent iteration
         if not isinstance(team_selection, list):
@@ -271,11 +283,12 @@ def update_main_graph(
         team_year_combo_data = team_year_combos
         layout = dash.no_update
         stylesheet = dash.no_update
+        new_elements = current_elements
         display_empty_param_warning = False
         legend = None
         all_all_warning_display = False
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-            display_empty_param_warning, legend, all_all_warning_display
+            new_elements, display_empty_param_warning, legend, all_all_warning_display
 
     # Handle update button
     if trigger_id == "update_button":
@@ -285,12 +298,13 @@ def update_main_graph(
             team_year_combo_data = dash.no_update
             layout = dash.no_update
             stylesheet = dash.no_update
+            new_elements = current_elements
             display_empty_param_warning = True
             legend = dash.no_update
             all_all_warning_display = False
 
             return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-                display_empty_param_warning, legend, all_all_warning_display
+                new_elements, display_empty_param_warning, legend, all_all_warning_display
         
         # Re-tuple again when pulling from storage for consistency
         tupled_current_combos = [tuple(x) for x in current_selected_combos] 
@@ -302,6 +316,7 @@ def update_main_graph(
                 team_year_combo_data = dash.no_update
                 layout = dash.no_update
                 stylesheet = dash.no_update
+                new_elements = current_elements
                 display_empty_param_warning = False
                 legend = dash.no_update
                 all_all_warning_display = True
@@ -310,52 +325,73 @@ def update_main_graph(
                     display_empty_param_warning, legend, all_all_warning_display
             
             elif team == "All":
-                tupled_current_combos = handle_all_selection(team_options, year, "team")
+                tupled_current_combos = handle_all_selection(tupled_current_combos, team_options, year, team_or_year="team")
             
             elif year == "All":
-                tupled_current_combos = handle_all_selection(year_options, team, "year")
+                tupled_current_combos = handle_all_selection(tupled_current_combos, year_options, team, team_or_year="year")
 
         final_combo_list = list(set(tupled_current_combos))
 
-        highlight_styles, legend_items = generate_legend_and_highlights(final_combo_list, elements)
+        new_elements, highlight_styles, legend_items = generate_legend_and_highlights(final_combo_list, full_elements_list)
 
-
-        
         team_year_combo_display = dash.no_update
         team_year_combo_data = dash.no_update
-        layout = {'name': 'random'}
+        layout = {'name': 'random', 
+                  'animate': True}
         stylesheet = unselected_stylesheet + highlight_styles
+        new_elements = new_elements
         display_empty_param_warning = False
         legend = html.Div(legend_items, 
                           style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
         all_all_warning_display = False
         
-        
+        import uuid
+
+
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-                display_empty_param_warning, legend, all_all_warning_display
+                new_elements, display_empty_param_warning, legend, all_all_warning_display
     
     else:
         team_year_combo_display = dash.no_update
         team_year_combo_data = dash.no_update
         layout = dash.no_update
         stylesheet = dash.no_update
+        new_elements = current_elements
         display_empty_param_warning = False
         legend = dash.no_update
         all_all_warning_display = False
         
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
-        display_empty_param_warning, legend, all_all_warning_display
+        new_elements, display_empty_param_warning, legend, all_all_warning_display
 
 @app.callback(
     Output('coach-name-click', 'children'),
     Output('coach-teams-buttons', 'children'),
     Input('main_graph', 'tapNodeData'),
-    Input('main_graph', 'elements')
 )
-def display_click_data(clickData, elements):
+def display_click_data(clickData):
+    """
+    Reads when a user clicks a node, displays who they clicked and buttons for each year the coach was employed
+
+    Args:
+        clickData (dict): Dash sends the data of the clicked node this way
+        full_elements_list (list): List of all elements in the main cytoscape
+    
+    Returns
+        - Sentence of which coach was clicked to be displayed
+        - Buttons for each year in the coaches employment history, generated by \
+            :func:`dash_graph_internals.gather_coaching_positions`
+
+    Behavior:
+        - Reads clicked coach's name
+        - Gathers their employment history with :func:`dash_graph_internals.gather_coaching_positions`
+        - Uses the employment history to generate buttons for each year
+    """
+    full_elements_list, _, _ = parse_json_file()
+    
     if clickData and 'id' in clickData: # id check ensures user clicked a node, not an edge
         clicked_coach = clickData['coach_name']
-        coach_employment_history = gather_coaching_positions(elements, clicked_coach)
+        coach_employment_history = gather_coaching_positions(full_elements_list, clicked_coach)
 
         coached_buttons = [
             html.Button(sentence, 
@@ -375,9 +411,38 @@ def display_click_data(clickData, elements):
     Output('sub_graph', 'stylesheet'),
     Input({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'n_clicks'),
     State({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'id'),
-    State('main_graph', 'elements')
 )
-def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
+def handle_coach_button_click(n_clicks_list, ids):
+    """
+    Triggers when one of the buttons created by :func:`display_click_data` is clicked, \
+    loads subgraph that visualized the coaching staff hierarchy for that team that season
+
+    Args:
+        n_clicks_list (list): List Dash uses to track the clicks on all created \
+            buttons of class `coach-btn`
+        ids (list): The ids of all the coach buttons
+        full_elements_list (list): List of all elements from the main cytoscape graph
+
+    Returns
+        - subgraph_elements (list): List of edges and nodes that make up subgraph, created by \
+        :func:`dash_graph_internals.created_bfs_graph_structure`
+        - subgraph_layout (dict): Arguments to add to the basic layout, defines the root as the analyzed \
+        staff's head coach
+        - subgraph_stylesheet (dict): Default stylesheet for subgraphs defined in `dash_graph_internals` \
+        plus an additional argument to highlight the coach the user initially selected for readability
+
+    Behavior:
+        - When a button is clicked, Dash sends an update to n_clicks_list
+        - This is tracked and paired to the relevant id, which allows the code to pull needed information
+        - The unique encoded positions on the staff are found with \
+            :func:`dash_graph_internals.find_endcoded_levels_on_staff` (see definition for why this is needed)
+        - This list is passed to :func:`create_bfs_graph_structure` to generate the subgraph elements \
+            and identify the head coach
+        - The relevant subgraph_layout and subgraph_stylesheets are created based on the head coach and \
+            clicked coach data
+    """
+    full_elements_list, _, _ = parse_json_file()
+    
     ctx = dash.callback_context
     if not ctx.triggered:
         subgraph_elements = dash.no_update
@@ -393,9 +458,9 @@ def handle_coach_button_click(n_clicks_list, ids, main_graph_elements):
             coach = btn_id['coach']
             
             # First need to collect all encoded positions (solves issue of staff not having all levels listed)
-            encoded_pos_on_staff = find_encoded_levels_on_staff(main_graph_elements, team, year)
+            encoded_pos_on_staff = find_encoded_levels_on_staff(full_elements_list, team, year)
 
-            subgraph_elements, head_coach = create_bfs_graph_structure(main_graph_elements, encoded_pos_on_staff, team, year)         
+            subgraph_elements, head_coach = create_bfs_graph_structure(full_elements_list, encoded_pos_on_staff, team, year)         
 
             subgraph_layout = {
                 'name': 'breadthfirst',
