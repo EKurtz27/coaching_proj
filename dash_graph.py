@@ -5,8 +5,10 @@ import dash
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State, ALL
 import itertools
+cyto.load_extra_layouts()
 
 app = dash.Dash('Test Run')
+
 
 app.layout = html.Div([
     dcc.ConfirmDialog(
@@ -37,15 +39,14 @@ app.layout = html.Div([
         multiple=False
     ),
     html.Button("Load graph from JSON updated 7/2/25", id="JSON-direct-load-button", n_clicks=0),
-
     cyto.Cytoscape(
-        id='main_graph',
-        elements=[],  # Start empty
-        layout={'name': 'circle'
-                },
+    id='main_graph',
+    elements=[],  # Start empty
+    layout={'name': 'circle'
+            },
 
-        stylesheet= default_stylesheet,
-        style={'width': '100%', 'height': '600px'}
+    stylesheet= default_stylesheet,
+    style={'width': '100%', 'height': '600px'}
     ),
     dcc.Dropdown(
         options= [],
@@ -69,6 +70,8 @@ app.layout = html.Div([
     dcc.Store(id='team_year_combo_store', storage_type='session'),
     html.Button("Update Parameters", id='update_button', n_clicks=0),
     html.Button("Clear Parameters", id='clear_params', n_clicks=0),
+    html.P("Due to an unresolved Dash bug, please press 'Update Parameters' a second time after the first update \
+           to fully update the graph"),
     html.Div(id='legend-container'),
     html.Div(className='row', children=[
         html.Div([
@@ -333,7 +336,8 @@ def update_main_graph(
 
         team_year_combo_display = dash.no_update
         team_year_combo_data = dash.no_update
-        layout = {'name': 'random'}
+        layout = {'name': 'random', 
+                  'animate': True}
         stylesheet = unselected_stylesheet + highlight_styles
         new_elements = new_elements
         display_empty_param_warning = False
@@ -341,8 +345,8 @@ def update_main_graph(
                           style={'padding': '10px', 'border': '1px solid #ccc', 'display': 'inline-block'})
         all_all_warning_display = False
         
-        import time
-        time.sleep(3)
+        import uuid
+
 
         return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
                 new_elements, display_empty_param_warning, legend, all_all_warning_display

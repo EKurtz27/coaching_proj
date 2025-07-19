@@ -258,7 +258,7 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
         for el in cytoscape_elements:
             data = el.get('data', {})
             # Search through edges
-            if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
+            if data.get('team_of_connection') == team and (int(year) in data.get('years_of_connection')):
                 team_highlighted_nodes.add(data.get('source'))
                 team_highlighted_nodes.add(data.get('target'))
                 edge_copy = deepcopy(el) # Deepcopy to be able to change id (allow parallel edges to exist for same job over multiple years)
@@ -316,8 +316,9 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
             # Log edge ids into a list
                     parallel_edges.append(edge_id2)
                     parallel_edges.sort()
-                    parallel_edges = tuple(parallel_edges)
+                    
             # Log the list into a list of lists
+            parallel_edges = tuple(parallel_edges)
             if len(parallel_edges) >= 2:
                 all_parallel_edges.add(parallel_edges)
             
