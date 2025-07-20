@@ -4,22 +4,15 @@ import dash_cytoscape as cyto
 import dash                      
 from dash import dcc, html, callback_context
 from dash.dependencies import Input, Output, State, ALL
+import dash_bootstrap_components as dbc
 import itertools
-cyto.load_extra_layouts()
+import json
 
-app = dash.Dash('Test Run')
 
+app = dash.Dash('Coaching Connections Exploration Dashboard', external_stylesheets=[dbc.themes.JOURNAL])
 
 app.layout = html.Div([
-    dcc.ConfirmDialog(
-        id='empty-parameter-warning',
-        message="Please select at least one combination of CFB team and year."
-    ),
-    dcc.ConfirmDialog(
-        id='all-all-warning',
-        message="We are unable to accommodate an 'All', 'All' parameter selection." \
-        "Please select a narrower range of parameters"
-    ),
+    
     dcc.Upload(
         id='upload-data',
         children=html.Div([
@@ -34,59 +27,152 @@ app.layout = html.Div([
             'borderStyle': 'dashed',
             'borderRadius': '5px',
             'textAlign': 'center',
-            'margin': '10px'
+            'margin': '20px'
         },
         multiple=False
     ),
-    html.Button("Load graph from JSON updated 7/2/25", id="JSON-direct-load-button", n_clicks=0),
-    cyto.Cytoscape(
-    id='main_graph',
-    elements=[],  # Start empty
-    layout={'name': 'circle'
-            },
+    dbc.Row([ 
+        dbc.Col(dbc.Button("Load graph from JSON File", id="JSON-direct-load-button", n_clicks=0, color="info"), 
+                width={'size': 'auto'}
+            ) 
+        ], justify='center'
+        ),
 
-    stylesheet= default_stylesheet,
-    style={'width': '100%', 'height': '600px'}
+    dbc.Row([ 
+        dbc.Col(html.H2("Coaching Connections Network", style= {
+                'padding-inline': '20px'})
+        )
+    ]),
+
+    dbc.Alert(
+        "Please select at least one combination of CFB team and year.",
+        id='empty-parameter-warning',
+        is_open=False,
+        dismissable=True    
     ),
-    dcc.Dropdown(
-        options= [],
-        multi= False,
-        placeholder= 'Select some teams',
-        id='team_select'
+    dbc.Alert(
+        "We are unable to accommodate an 'All', 'All' parameter selection." \
+        "Please select a narrower range of parameters",
+        id='all-all-warning',
+        is_open=False,
+        dismissable=True    
     ),
-    dcc.Dropdown(
-        options= [],
-        multi= True,
-        placeholder= 'Select some years',
-        id='year_select'
+
+    dbc.Row([
+        dbc.Col(
+            html.Div(
+                cyto.Cytoscape(
+                    id='main_graph',
+                    elements=[],  # Start empty
+                    layout={'name': 'circle'
+                            },
+
+                    stylesheet= default_stylesheet,
+                    style={'width': '100%', 'height': '600px'}
+                ), style={'padding':'20px'}
+            ),
+        ),
+    ]),
+    
+    dbc.Row([
+        dbc.Col(dcc.Dropdown(
+                options= [],
+                multi= False,
+                placeholder= 'Select a team to analyze',
+                id='team_select'
+            ), 
+            width={'size': 4, 'offset': 1}
+        ),
+        dbc.Col(dcc.Dropdown(
+                options= [],
+                multi= True,
+                placeholder= 'Select years to analyze for that team',
+                id='year_select'
+            ),
+            width={'size': 4, 'offset': 2}
+        )
+    ],
     ),
     
-    html.Pre(id="team_year_combo_display", style= {
-        'border': 'thin lightgrey solid', 
-        'overflowX': 'scroll'
-    }),
+    dbc.Row([dbc.Col(html.H6(""))]), # Helps spacing, gutters are another option
 
-    html.Button("Submit Team & Year Combination", id='team_year_combo_button', n_clicks=0),
-    dcc.Store(id='team_year_combo_store', storage_type='session'),
-    html.Button("Update Parameters", id='update_button', n_clicks=0),
-    html.Button("Clear Parameters", id='clear_params', n_clicks=0),
-    html.P("Due to an unresolved Dash bug, please press 'Update Parameters' a second time after the first update \
-           to fully update the graph"),
-    html.Div(id='legend-container'),
-    html.Div(className='row', children=[
-        html.Div([
-            dcc.Markdown("""
-                **Click Data**
-                
-                Mouse over values in the graph
-            """),
-            html.Pre(id='coach-name-click', style= {
-                'border': 'thin lightgrey solid',
-                'overflowX': 'scroll'
+    dbc.Row([ dbc.Col(html.H5('Selected Team - Year Combinations:'), 
+                width={'size': 'auto', 'offset': 1})
+    ],
+    ),
+
+    dbc.Row([
+        dbc.Col(html.Pre(
+            id="team_year_combo_display", style= {
+            'border': 'thin lightgrey solid', 
+            'overflowX': 'auto',
+            'whiteSpace': 'pre-wrap'
             }),
-            html.Div(id='coach-teams-buttons'),
-        ], className='three columns')
-    ]),
+            width={'size': 10, 'offset': 1}
+        )
+    ],
+    ),
+
+    dbc.Row([
+        dbc.Col(dbc.Button("Submit Team & Year Combination", id='team_year_combo_button', n_clicks=0, color="primary"),
+                width={'size': 4, 'offset': 0}
+        ),
+        dbc.Col(dbc.Button("Update Parameters", id='update_button', n_clicks=0, color="primary"),
+                width={'size': 3, 'offset': 0}
+        ),
+        dbc.Col(dbc.Button("Clear Parameters", id='clear_params', n_clicks=0),
+                width={'size': 2, 'offset': 0}
+        ),
+    ], justify='center'
+    ),
+    dcc.Store(id='team_year_combo_store', storage_type='session'),
+    
+    dbc.Row([
+        dbc.Col(
+            html.P("Due to an unresolved Dash issue, please press 'Update Parameters' a second time after the first update \
+            to fully update the graph", style={'fontStyle': 'italic'}),
+            width={'size': 'auto', 'offset': 0}
+        )
+    ], justify='center'
+    ),
+
+    dbc.Row([dbc.Col(html.Div(id='legend-container'), width={'size': 'auto'}), 
+        ], justify='center'
+    ),
+
+    dbc.Row([
+        dbc.Col(html.H5('Coaching History'), width={'size': 'auto', 'offset': 1}),
+    ],),
+    
+    dbc.Row([
+        dbc.Col(html.P("Click on a coach's node to view their full coaching history"), 
+                width={'size': 'auto', 'offset': 1}),
+    ],),
+
+    dbc.Row([
+        dbc.Col(html.H6(id='coach-name-click', style= {
+                'border': 'thin lightgrey solid',
+                'whiteSpace': 'normal',
+                'padding': '10px'
+            }), width={'size': 'auto', 'offset': 1}),
+    ],),
+
+    dbc.Row([
+        dbc.Col(html.Div(id='coach-teams-buttons', style={
+            'columnCount': 2,
+            'columnGap': '10px',
+            'justifyContent': 'center'
+        }),
+                width={'size': 12}),
+    ], justify='center'
+    ),
+
+    dbc.Row([ 
+            dbc.Col(html.H3(id='staff-header', style={
+                    'padding-inline': '20px'})
+            )
+        ]),
+
     cyto.Cytoscape(
         id='sub_graph',
         elements=[],  # Start empty
@@ -146,9 +232,9 @@ def generate_graph(contents, filename, _json_clicks):
     Output('main_graph', 'layout'),
     Output('main_graph', 'stylesheet'),
     Output('main_graph', 'elements', allow_duplicate=True),
-    Output('empty-parameter-warning', 'displayed'),
+    Output('empty-parameter-warning', 'is_open'),
     Output('legend-container', 'children'),
-    Output('all-all-warning', 'displayed'),
+    Output('all-all-warning', 'is_open'),
     Input('team_year_combo_button', 'n_clicks'),
     Input('update_button', 'n_clicks'),
     Input('clear_params', 'n_clicks'),
@@ -336,7 +422,7 @@ def update_main_graph(
 
         team_year_combo_display = dash.no_update
         team_year_combo_data = dash.no_update
-        layout = {'name': 'random', 
+        layout = {'name': 'circle', 
                   'animate': True}
         stylesheet = unselected_stylesheet + highlight_styles
         new_elements = new_elements
@@ -368,6 +454,7 @@ def update_main_graph(
     Output('coach-name-click', 'children'),
     Output('coach-teams-buttons', 'children'),
     Input('main_graph', 'tapNodeData'),
+    prevent_initial_call=True
 )
 def display_click_data(clickData):
     """
@@ -394,9 +481,16 @@ def display_click_data(clickData):
         coach_employment_history = gather_coaching_positions(full_elements_list, clicked_coach)
 
         coached_buttons = [
-            html.Button(sentence, 
-                        id={'type': 'coach-btn', 'action': 'year-coach-tree', 'coach': clicked_coach, 'team': team, 'year': year}
-                        )
+            dbc.Button(sentence, 
+                        id={'type': 'coach-btn', 'action': 'year-coach-tree', 'coach': clicked_coach, 'team': team, 'year': year},
+                        color='info',
+                        style={
+                            'marginBottom': '10px',
+                            'display': 'block',      
+                            'marginLeft': 'auto',  
+                            'marginRight': 'auto',
+                        }
+                    )
                         for sentence, team, year in coach_employment_history
         ]
             
@@ -409,10 +503,12 @@ def display_click_data(clickData):
     Output('sub_graph', 'elements'),
     Output('sub_graph', 'layout'),
     Output('sub_graph', 'stylesheet'),
+    Output('staff-header', 'children'),
     Input({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'n_clicks'),
     State({'type': 'coach-btn', 'action': ALL, 'coach': ALL, 'team': ALL, 'year': ALL}, 'id'),
+    prevent_initial_call=True
 )
-def handle_coach_button_click(n_clicks_list, ids):
+def handle_coach_button_click(n_clicks_list, ids): # Error, not updating on second click
     """
     Triggers when one of the buttons created by :func:`display_click_data` is clicked, \
     loads subgraph that visualized the coaching staff hierarchy for that team that season
@@ -444,38 +540,46 @@ def handle_coach_button_click(n_clicks_list, ids):
     full_elements_list, _, _ = parse_json_file()
     
     ctx = dash.callback_context
-    if not ctx.triggered:
+    if not ctx.triggered or all((n is None or n == 0) for n in n_clicks_list):
         subgraph_elements = dash.no_update
         subgraph_layout = dash.no_update
         subgraph_stylesheet = dash.no_update
 
-        return subgraph_elements, subgraph_layout, subgraph_stylesheet
-    for n_clicks, btn_id in zip(n_clicks_list, ids):
-        if n_clicks:
+        return subgraph_elements, subgraph_layout, subgraph_stylesheet, ""
 
+    triggered_prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    try:
+        triggered_id_json = json.loads(triggered_prop_id)
+    except Exception:
+        return dash.no_update, dash.no_update, dash.no_update, ""
+
+
+    for btn_id in ids:
+        if btn_id == triggered_id_json:
             year = btn_id['year']
             team = btn_id['team']
             coach = btn_id['coach']
-            
+            print(f'Click Recieved: {team} in year {year}')
             # First need to collect all encoded positions (solves issue of staff not having all levels listed)
             encoded_pos_on_staff = find_encoded_levels_on_staff(full_elements_list, team, year)
 
-            subgraph_elements, head_coach = create_bfs_graph_structure(full_elements_list, encoded_pos_on_staff, team, year)         
+            subgraph_elements, graph_roots = create_bfs_graph_structure(full_elements_list, encoded_pos_on_staff, team, year)         
 
             subgraph_layout = {
                 'name': 'breadthfirst',
-                'roots': f'[id = "{head_coach}"]'
+                'roots': ", ".join(f'[id = "{coach_name}"]' for coach_name in graph_roots)
             }
         
             hightlight_clicked_coach = [{
                 'selector': f'node[id = "{coach}"]',
-                    'style': {f'background-color': 'red', 'border-width': 1, 'border-color': 'black', 'opacity': 1}
+                    'style': {f'background-color': '#336699', 'border-width': 1, 'border-color': 'black', 'opacity': 1}
             }]
             
             subgraph_stylesheet = subgraph_default_stylesheet + hightlight_clicked_coach
+            staff_header = f"Staff Hierarchy for {team} in {year}"
 
-            return subgraph_elements, subgraph_layout, subgraph_stylesheet
-    return dash.no_update, dash.no_update, dash.no_update
+            return subgraph_elements, subgraph_layout, subgraph_stylesheet, staff_header
+    return dash.no_update, dash.no_update, dash.no_update, ""
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()

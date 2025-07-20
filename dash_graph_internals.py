@@ -280,7 +280,7 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
                 new_elements_list.append(node_copy) # Consider adding a class attribute here, then doing color by class (would require a deep copy)
 
     total_combos = len(all_highlighted_edges.keys())
-    legend_items = []
+    indiv_legend_items = []
     highlight_styles = []
     all_parallel_edges = set()
 
@@ -331,7 +331,7 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
 
                 
 
-        legend_items.append(
+        indiv_legend_items.append(
             html.Div([
                 html.Span(style={
                     'display': 'inline-block',
@@ -339,11 +339,21 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
                     'height': '20px',
                     'backgroundColor': color,
                     'marginRight': '10px',
-                    'border': '1px solid #333'
+                    'border': '1px solid #333',
+                    'verticalAlign': 'middle'
                 }),
-                f"{team} - {year}"
-            ], style={'marginBottom': '5px'})
+                html.Span(f"{team} - {year}", style={'verticalAlign': 'middle'})
+            ], style={
+                'marginRight': '20px',
+                'marginBottom': '10px'})
         )
+
+
+    legend_items = html.Div(indiv_legend_items, style={
+        'display': 'flex',
+        'flexWrap': 'wrap',
+        'alignItems': 'center'
+    })
 
     for grouped_parallel_edges in all_parallel_edges:
         selector = ', '.join(f'[id = "{edge_id}"]' for edge_id in grouped_parallel_edges)
@@ -351,11 +361,8 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
             'selector': selector,
             'style': {'curve-style': 'bezier'}
         })
-
-    print(f"Returning elements: {len(new_elements_list)}")
-    print(f"Returning styles: {len(highlight_styles)}")
     
-    return list(new_elements_list), list(highlight_styles), list(legend_items)
+    return new_elements_list, highlight_styles, legend_items
 
 def find_encoded_levels_on_staff(main_elements: list, team: str, year: int) -> list:
     """
@@ -421,15 +428,17 @@ def create_bfs_graph_structure(cytoscape_elements: list, encoded_pos_list: list,
     """
     valid_nodes = []
     valid_edges = []
-    
+    highest_encoded_pos = min(encoded_pos_list)
+    most_senior_coaches = []
+
     for el in cytoscape_elements:
         data = el.get('data', {})
         if data.get('team_of_connection') == team and (year in data.get('years_of_connection')):
             source_encoded_pos, target_encoded_pos = data.get('encoded_connection')
-            if source_encoded_pos == 1:
-                head_coach = data.get('source')
-            if target_encoded_pos == 1:
-                head_coach = data.get('target')
+            if source_encoded_pos == highest_encoded_pos:
+                most_senior_coaches.append(data.get('source'))
+            if target_encoded_pos == highest_encoded_pos:
+                most_senior_coaches.append(data.get('target'))
             if (encoded_pos_list.index(target_encoded_pos) - 1 == encoded_pos_list.index(source_encoded_pos) or 
                 encoded_pos_list.index(target_encoded_pos) + 1 == encoded_pos_list.index(source_encoded_pos)):
                 valid_edges.append(el)
@@ -460,7 +469,7 @@ def create_bfs_graph_structure(cytoscape_elements: list, encoded_pos_list: list,
                 valid_nodes.append(el)
     sub_graph_elements = valid_nodes + valid_edges  
 
-    return sub_graph_elements, head_coach
+    return sub_graph_elements, most_senior_coaches
 
 default_stylesheet=[
     {'selector': 'node', 'style': {
@@ -498,16 +507,17 @@ unselected_stylesheet = [
 subgraph_default_stylesheet=[
     {'selector': 'node', 'style': {
         'label': 'data(subgraph_label)',
-        'height': 10,
-        'width': 10,
-        'font-size': 5,
-        'opacity': 1
+        'size': 30,
+        'font-size': 15,
+        'opacity': 1,
+        'background-color': "#eb6864",
+        'border-color': 'black'
     }},
 
     {'selector': 'edge', 'style': {
         'line-color': '#aaa',
         'curve-style': 'bezier',
         'width': 1,
-        'opacity': 1
+        'opacity': .5
     }}
 ]
