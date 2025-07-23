@@ -290,10 +290,16 @@ def generate_legend_and_highlights(combo_list: list, cytoscape_elements: list):
     highlight_styles = []
     all_parallel_edges = set()
 
-    for idx, dict_info in enumerate(all_highlighted_edges.items()): # This logic handles 'All' selections w/o making a color for teams w/o valid edges
+    sorted_combos = sorted(
+    all_highlighted_edges.keys(),
+    key=lambda combo: int(combo[1]), reverse=True # combo = (team, year)
+    )
+
+    for idx, combo in enumerate(sorted_combos): # This logic handles 'All' selections w/o making a color for teams w/o valid edges
         color = generate_color(idx, total_combos)
-        combo, edge_info_list = dict_info
         team, year = combo
+        edge_info_list = all_highlighted_edges[combo]
+        
 
         indiv_legend_items.append(
             html.Div([
