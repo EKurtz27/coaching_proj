@@ -34,9 +34,16 @@ app.layout = html.Div([
     dbc.Row([ 
         dbc.Col(dbc.Button("Load graph from JSON File", id="JSON-direct-load-button", n_clicks=0, color="info"), 
                 width={'size': 'auto'}
-            ) 
-        ], justify='center'
-        ),
+            ),
+        dbc.Col(
+            dbc.Switch(
+                id="full_graph_toggle",
+                label="Load full initial network? (Recommended off for slower machines)",
+                value=False,
+            ), width={'size': 'auto'}
+        ),    
+    ], justify='center'
+    ),
 
     dbc.Row([ 
         dbc.Col(html.H2("Coaching Connections Network", style= {
@@ -190,12 +197,13 @@ app.layout = html.Div([
     Output('year_select', 'options'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
+    State('full_graph_toggle', 'value'),
     Input('JSON-direct-load-button', 'n_clicks'),
 )
-def generate_graph(contents, filename, _json_clicks):
+def generate_graph(contents, filename, full_graph_toggle, _json_clicks):
     """
     Generates graph from either an uploaded CSV file or from a local JSON file, 
-    depending on user action.
+    depending on user action. May or not load initial network visualization based on user toggle.
 
     Args:
         contents (file contents): Data uploaded to the html.A 'Select a CSV File', will be decoded
@@ -216,11 +224,17 @@ def generate_graph(contents, filename, _json_clicks):
     if trigger_id == 'upload-data' and contents is not None:
         # CSV logic
         elements, teams_list, years_list = parse_csv_file(contents, filename)
+        if full_graph_toggle == False:
+            return [], teams_list, years_list
+        
         return elements, teams_list, years_list
     
     elif trigger_id == 'JSON-direct-load-button':
         # JSON logic
         elements, teams_list, years_list = parse_json_file()
+        if full_graph_toggle == False:
+            return [], teams_list, years_list
+        
         return elements, teams_list, years_list
     
     else:
@@ -244,12 +258,13 @@ def generate_graph(contents, filename, _json_clicks):
     State('main_graph', 'elements'),
     State('team_select', 'options'),
     State('year_select', 'options'),
+    State('full_graph_toggle', 'value'),
     prevent_initial_call=True
-)
+) # Rework clear params to work with full graph toggle
 def update_main_graph(
     combo_n_clicks, _update_n_clicks, _clear_n_clicks,
     current_selected_combos, team_selection, year_selections,
-    current_elements, team_options, year_options
+    current_elements, team_options, year_options, full_graph_toggle
 ):   
     """
     Logic to handle all versions of updating the main graph interface, including adding
@@ -321,6 +336,19 @@ def update_main_graph(
 
     # Handle clear
     if trigger_id == "clear_params":
+        if full_graph_toggle == False:
+            team_year_combo_display = ""
+            team_year_combo_data = []
+            layout = {'name': 'circle'}
+            stylesheet = default_stylesheet
+            new_elements = []
+            display_empty_param_warning = False
+            legend = None
+            all_all_warning_display = False
+
+            return team_year_combo_display, team_year_combo_data, layout, stylesheet, \
+            new_elements, display_empty_param_warning, legend, all_all_warning_display
+
         team_year_combo_display = ""
         team_year_combo_data = []
         layout = {'name': 'circle'}
@@ -547,7 +575,7 @@ def handle_coach_button_click(n_clicks_list, ids): # Error, not updating on seco
 
         return subgraph_elements, subgraph_layout, subgraph_stylesheet, ""
 
-    triggered_prop_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    triggered_prop_id = get_id_of_triggered(ctx)
     try:
         triggered_id_json = json.loads(triggered_prop_id)
     except Exception:
@@ -559,7 +587,7 @@ def handle_coach_button_click(n_clicks_list, ids): # Error, not updating on seco
             year = btn_id['year']
             team = btn_id['team']
             coach = btn_id['coach']
-            print(f'Click Recieved: {team} in year {year}')
+
             # First need to collect all encoded positions (solves issue of staff not having all levels listed)
             encoded_pos_on_staff = find_encoded_levels_on_staff(full_elements_list, team, year)
 
