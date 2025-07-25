@@ -1,5 +1,15 @@
 import pickle
 import networkx as nx
+from basic_graph_generation import *
+
+# input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
+# with open(f"{input_file_name}", "r") as coach_jobs_csv:
+#     coach_jobs_df = pd.read_csv(coach_jobs_csv)
+# position_encoding(coach_jobs_df)
+# G = create_nx_graph(coach_jobs_df)
+
+# pickle.dump(G, open('data/full_coach_network.pickle', 'wb'))
+
 
 G = pickle.load(open('data/full_coach_network.pickle', 'rb'))
 
@@ -22,7 +32,7 @@ def keep_only_mentorship_true_edges(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
     edges_to_remove = []
     for u, v, k, edge_data in graph.edges(data=True, keys=True):
         mentorship_status = edge_data.get("mentor_status", "")
-        if mentorship_status not in ("Mentor"):
+        if mentorship_status not in ("Mentor", "Equal Standing"):
             edges_to_remove.append((u, v, k))
     for u, v, k in edges_to_remove:
         graph.remove_edge(u, v, k)
@@ -58,18 +68,19 @@ def clean_graph(graph: nx.MultiDiGraph, coach: str, last_valid_year: int) -> nx.
     # print(G.number_of_edges())
 
 def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, coach1: str, coach2: str):
-    coach1_descendants = nx.descendants(cleaned_graph, coach1)
-    coach2_descendants = nx.descendants(cleaned_graph, coach2)
+    coach1_ancestors = nx.ancestors(cleaned_graph, coach1)
+    coach2_ancestors = nx.ancestors(cleaned_graph, coach2)
 
-    shared_descendants = coach1_descendants & coach2_descendants
-    if shared_descendants == None:
-        print("Error: no shared descendants")
+    shared_ancestors = coach1_ancestors & coach2_ancestors
+
+    if shared_ancestors == None:
+        print("Error: no shared ancestors")
     min_dist = float('inf')
     closest = None
     rev_graph = cleaned_graph.reverse(copy=True)
-    for ancestor in shared_descendants:
-        dist1 = nx.shortest_path_length(cleaned_graph, coach1, ancestor)
-        dist2 = nx.shortest_path_length(cleaned_graph, coach2, ancestor)
+    for ancestor in shared_ancestors:
+        dist1 = nx.shortest_path_length(rev_graph, coach1, ancestor)
+        dist2 = nx.shortest_path_length(rev_graph, coach2, ancestor)
         total_dist = dist1 + dist2
         if total_dist < min_dist:
             min_dist = total_dist
@@ -85,6 +96,9 @@ def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, coach1: str, coa
     # This doesn't accurately represent the passing down of coaching theory
     # Possible solution: custom BFS search that takes year into account after finding shared descendents
     return closest, min_dist
+
+first_edge = next(iter(G.edges(data=True)))
+print(first_edge)
 
 clean_graph(G, "Dan Lanning", 2025)
 closest, min_dist = find_lowest_common_ancestor(G, "Dan Lanning", "Will Stein")
