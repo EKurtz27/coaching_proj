@@ -26,7 +26,7 @@ def find_team_of_coach_year(graph: nx.MultiDiGraph, coach: str, year: int) -> st
                 return edge.get("team_of_connection")
         
 team = find_team_of_coach_year(G, "Dan Lanning", 2024)
-print(team)
+#print(team)
 
 def keep_only_mentorship_true_edges(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
     edges_to_remove = []
@@ -67,6 +67,42 @@ def clean_graph(graph: nx.MultiDiGraph, coach: str, last_valid_year: int) -> nx.
     remove_edges_of_current_staff(graph, coach, last_valid_year)
     # print(G.number_of_edges())
 
+def chronologic_sentsitive_bfs_shortest_path_length(graph: nx.MultiDiGraph, start_node: str, end_node: str) -> int:
+    explored = set()
+    queue = [[(start_node, None, None)]] # None as the previous edge
+    distance_dict = {}
+    distance_dict[start_node] = 0
+    if start_node == end_node:
+        print("Same node")
+        return distance_dict[end_node], queue
+    while queue:
+        newly_explored = set()
+        considered_path = queue.pop(0)
+        considered_node, previous_edge_key, previous_edge_data = considered_path[-1] # How to best log keys? [u, k, v]? Then pull last 3 values?
+        current_distance = distance_dict[considered_node]
+        if previous_edge_data == None:
+            previous_year = float("inf") # Any year will be valid
+        else:
+            previous_year = min(previous_edge_data.get("years_of_connection")) # Every new connection should have taken place before the previous
+        preds = graph.pred[considered_node] # [(Coach, edge_data), (coach, edge_data)]?
+
+        for coach_node, edges in preds.items():
+            if coach_node not in explored:    
+                for edge_key, edge_data in edges.items():
+                    # need to collect coaches and add to list at end of neighbor adding
+                    # so code can consider multiple edges from a coach but not circle back to them later
+                    years_of_connection = edge_data.get("years_of_connection")
+                    if all(y <= previous_year for y in years_of_connection): # Every new connection should have taken place before the previous
+                        newly_explored.add(coach_node)
+                        distance_dict[coach_node] = current_distance + 1
+                        new_path = list(considered_path)
+                        new_path.append( (coach_node, edge_key, edge_data) )
+                        if coach_node == end_node:
+                            return new_path
+        explored.update(newly_explored)  
+    return None                
+
+
 def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, coach1: str, coach2: str):
     coach1_ancestors = nx.ancestors(cleaned_graph, coach1)
     coach2_ancestors = nx.ancestors(cleaned_graph, coach2)
@@ -75,32 +111,43 @@ def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, coach1: str, coa
 
     if shared_ancestors == None:
         print("Error: no shared ancestors")
+    min_c1_path = None
+    min_c2_path = None
     min_dist = float('inf')
     closest = None
     rev_graph = cleaned_graph.reverse(copy=True)
     for ancestor in shared_ancestors:
-        dist1 = nx.shortest_path_length(rev_graph, coach1, ancestor)
-        dist2 = nx.shortest_path_length(rev_graph, coach2, ancestor)
+        coach1_to_ancestor_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, coach1, ancestor)
+        coach2_to_ancestor_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, coach2, ancestor)
+        if coach1_to_ancestor_path == None or coach2_to_ancestor_path == None:
+            continue
+        dist1 = len(coach1_to_ancestor_path) - 1
+        dist2 = len(coach2_to_ancestor_path) - 1
         total_dist = dist1 + dist2
         if total_dist < min_dist:
+            min_c1_path = coach1_to_ancestor_path
+            min_c2_path = coach2_to_ancestor_path
             min_dist = total_dist
             closest = ancestor
-    # # Get the list of nodes in the shortest path, debugging check
-    sp1 = nx.shortest_path(cleaned_graph, coach1, closest)
-    print(f"sp1: {sp1}")
-    sp2 = nx.shortest_path(cleaned_graph, coach2, closest)
-    print(f"sp2: {sp2}")
+
     # Current status: works (kinda)! Issue is that connections are drawn with no respect for year
     # Example: **Dan Lanning -> Brad Sherrod -> Justin Burke <- **Will Stein
     # Brad Sherrod did coach under Justin Burke in 2022/2023, but that is **after** Dan Lanning coached under Brad Sherrod in 2014
     # This doesn't accurately represent the passing down of coaching theory
     # Possible solution: custom BFS search that takes year into account after finding shared descendents
+    print(f"c1: {min_c1_path}")
+    print(f"c2: {min_c2_path}")
     return closest, min_dist
 
-first_edge = next(iter(G.edges(data=True)))
-print(first_edge)
+# first_edge = next(iter(G.edges(data=True)))
+# print(first_edge)
 
 clean_graph(G, "Dan Lanning", 2025)
 closest, min_dist = find_lowest_common_ancestor(G, "Dan Lanning", "Will Stein")
 print(closest)
 print(min_dist) 
+
+# Lanning_preds = G.pred["Dan Lanning"]
+# for coach, edge_dict in Lanning_preds.items():
+#     for edge_key, edge_data in edge_dict.items():
+#         print(f"{coach}: {edge_data.get("team_of_connection")}") #.get does work at this stage
