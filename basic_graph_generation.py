@@ -147,7 +147,7 @@ def create_nx_graph(coach_jobs_df):
                         years_of_edges[(coach['Name'], other_coach['Name'], edge_key)] = list(set(parse_seasons(coach['Seasons at Position'])) & set(parse_seasons(other_coach['Seasons at Position'])))
                         teams_of_edges[(coach['Name'], other_coach['Name'], edge_key)] = coach['Team']
                         indiv_mentor_status = "Not a Mentor"  # Was the coach at the end of the edge a mentor to the coach at the start of the edge
-                        if other_coach['Encoded Position'] < coach['Encoded Position']:
+                        if other_coach['Encoded Position'] > coach['Encoded Position']:
                             indiv_mentor_status = "Mentor" # The coach was a distinct mentor
                         if other_coach['Encoded Position'] == coach['Encoded Position']:
                             indiv_mentor_status = "Equal Standing" # The coaches were on equal footing, but might've had influence on each other
