@@ -9,6 +9,7 @@ activate_home_venv.ps1
 coach_jobs_raw.json
 coach_slugs.json
 current_position_encoding.txt
+/data/LCAs
 
 # Ignore system files
 .DS_Store

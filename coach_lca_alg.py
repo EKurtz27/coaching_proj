@@ -74,12 +74,6 @@ def remove_edges_of_last_job(graph: nx.MultiDiGraph, team: str,  coach: str, las
             # Solution? If lowest number in coach_connection_years is 1 less than a year in this edge, this represents a promotion
             hc_coach_edge_data = edge_data
             hc_coach_connection_years.update(edge_data.get("years_of_connection"))
-    
-    if hc_coach_connection_years == None:
-        print("HC to coach connection not found!")
-        print(coach)
-        import sys
-        sys.exit()
 
     edges_to_remove = []
     for u, v, k, edge_data in graph.edges(data=True, keys= True):
@@ -138,36 +132,55 @@ def chronologic_sentsitive_bfs_shortest_path_length(graph: nx.MultiDiGraph, star
     return None                
 
 
-def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, coach1: str, coach2: str):
-    coach1_ancestors = nx.ancestors(cleaned_graph, coach1)
+def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, head_coach: str, coach2: str):
+    min_dist = float('inf')
+    closest = None
+    is_direct_path = False
+    direct_path_dist = None
+    min_hc_path = None
+    min_c2_path = None 
+    direct_path = None
+
+    head_coach_ancestors = nx.ancestors(cleaned_graph, head_coach)
     coach2_ancestors = nx.ancestors(cleaned_graph, coach2)
 
-    shared_ancestors = coach1_ancestors & coach2_ancestors
+    if head_coach in coach2_ancestors:
+        direct_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, coach2, head_coach)
+        if not direct_path == None:
+            direct_path_dist = len(direct_path) - 1
+
+    shared_ancestors = head_coach_ancestors & coach2_ancestors
 
     if shared_ancestors == None:
         print("Error: no shared ancestors")
-    min_c1_path = None
-    min_c2_path = None
-    min_dist = float('inf')
-    closest = None
-    rev_graph = cleaned_graph.reverse(copy=True)
+        return None, float("inf"), False
+
     for ancestor in shared_ancestors:
-        coach1_to_ancestor_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, coach1, ancestor)
+        hc_to_ancestor_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, head_coach, ancestor)
         coach2_to_ancestor_path = chronologic_sentsitive_bfs_shortest_path_length(cleaned_graph, coach2, ancestor)
-        if coach1_to_ancestor_path == None or coach2_to_ancestor_path == None:
+        if hc_to_ancestor_path == None or coach2_to_ancestor_path == None:
             continue
-        dist1 = len(coach1_to_ancestor_path) - 1
+        dist1 = len(hc_to_ancestor_path) - 1
         dist2 = len(coach2_to_ancestor_path) - 1
         total_dist = dist1 + dist2
         if total_dist < min_dist:
-            min_c1_path = coach1_to_ancestor_path
+            min_hc_path = hc_to_ancestor_path
             min_c2_path = coach2_to_ancestor_path
+            direct_path = None
             min_dist = total_dist
             closest = ancestor
 
-    # print(f"{coach1}: {min_c1_path}")
-    # print(f"{coach2}: {min_c2_path}")
-    return closest, min_dist
+    if direct_path_dist:
+        if direct_path_dist < min_dist:
+            min_dist = direct_path_dist
+            min_hc_path = None
+            min_c2_path = None
+            closest = head_coach
+            is_direct_path = True
+
+    if closest == None:
+        closest = "None" # Done for formatting the csv
+    return closest, min_dist, is_direct_path, direct_path, min_hc_path, min_c2_path
 
 def list_distance_scores(graph: nx.MultiDiGraph, team: str, year: int) -> list:
     relevant_coaches = set()
@@ -176,61 +189,74 @@ def list_distance_scores(graph: nx.MultiDiGraph, team: str, year: int) -> list:
         edge_years = edge_data.get("years_of_connection")
         edge_team = edge_data.get("team_of_connection")
         if year in edge_years and edge_team == team:
-            relevant_coaches.add(u)
-            relevant_coaches.add(v)
             if edge_data.get("source_position", "") == "Head Coach":
                 head_coach = u
-            if edge_data.get("target_position", "") == "Head Coach":
+                relevant_coaches.add((v, edge_data.get("target_position")))
+            elif edge_data.get("target_position", "") == "Head Coach":
                 head_coach = v
+                relevant_coaches.add((u, edge_data.get("source_position")))
+            else:
+                relevant_coaches.add((u, edge_data.get("source_position")))
+                relevant_coaches.add((v, edge_data.get("target_position")))
     if head_coach == None:
-        print(f"{team} does not have a head coach")
+        print(f"{team} in {year} does not have a head coach in data set")
         return None
-    relevant_coaches.remove(head_coach)
-    print(relevant_coaches)
-    print(head_coach)
+    # print(relevant_coaches)
+    # print(head_coach)
     distance_list = []
-    for coach2 in relevant_coaches:
-        indiv_coach_graph = clean_graph(graph, team, coach2, year) # Head coach already identified, integrate?
+
+    for coach2, coach2_position in relevant_coaches:
+
+        indiv_coach_graph = clean_graph(graph, team, coach2, year)
+
         distance_list.append({
-            f"{head_coach} -> {coach2}": find_lowest_common_ancestor(indiv_coach_graph, head_coach, coach2)
+            "Queried Coach": coach2,
+            "Queried Coach Position": coach2_position,
+            "Pathing Info": find_lowest_common_ancestor(indiv_coach_graph, head_coach, coach2)
             }) 
     return distance_list
-
-# first_edge = next(iter(G.edges(data=True)))
-# print(first_edge)
-
-# clean_graph(G, "Dan Lanning", 2025)
-# closest, min_dist = find_lowest_common_ancestor(G, "Dan Lanning", "Will Stein")
-# print(closest)
-# print(min_dist) 
-
-# Lanning_preds = G.pred["Dan Lanning"]
-# for coach, edge_dict in Lanning_preds.items():
-#     for edge_key, edge_data in edge_dict.items():
-#         print(f"{coach}: {edge_data.get("team_of_connection")}") #.get does work at this stage
 
 if __name__ == "__main__":
     with open("data/clean_sorted_coach_jobs.csv", "r") as f:
         coach_jobs = pd.read_csv(f)
 
-    # Convert the column to lists
+    # Convert the string list to a int list
     coach_jobs['Seasons at Position'] = coach_jobs['Seasons at Position'].apply(ast.literal_eval)
 
-    # Now you can filter as intended
-    teams_for_year_df = coach_jobs[coach_jobs['Seasons at Position'].apply(lambda x: 2025 in x)]
-    teams_for_year = teams_for_year_df["Team"].unique()
+    for year in range(2020, 2026):
+        teams_for_year_df = coach_jobs[coach_jobs['Seasons at Position'].apply(lambda x: year in x)]
+        teams_for_year = teams_for_year_df["Team"].unique()
 
-    distances_2025 = []
+        all_rows = []
 
-    for team in teams_for_year:
-        team_dist_list = list_distance_scores(G, team, 2025)
-        distances_2025.append(
-            {
-                "Team": team,
-                "Distance List": team_dist_list
-            }
-        )
+        for team in teams_for_year:
 
-    distances_2025_df = pd.DataFrame(distances_2025)
+            team_dist_list = list_distance_scores(G, team, year)
+            # Build a dict: {coach2: mentor_combined_distance}
+            row_dict = {}
+            if team_dist_list:
+                for item in team_dist_list: # Fix in the morning, check chat
+                    coach2 = item["Queried Coach"]
+                    coach2_pos = item["Queried Coach Position"]
+                    lca_path_info = item["Pathing Info"]
+                    all_rows.append({
+                        "Team": team,
+                        "Year": year,                        
+                        "Queried Coach": coach2,
+                        "Queried Coach Position": coach2_pos,
+                        "Shared Mentor": lca_path_info[0],
+                        "Combined Distance": lca_path_info[1],
+                        "Direct Path": lca_path_info[2],
+                        "Queried Coach to HC Pathing": lca_path_info[3],
+                        "HC to Shared Mentor Pathing": lca_path_info[4],
+                        "Queried Coach to Shared Mentor Pathing": lca_path_info[5]
+                    })
+            if not team_dist_list:
+                continue
+            
+            print(f"{year} {team} completed!")
 
-    distances_2025_df.to_csv("test.csv", index=False)
+        team_df = pd.DataFrame(all_rows)
+        team_df.index.name = "Queried Coach"
+
+        team_df.to_csv(f"data/LCAs/{year}_distances.csv", index=False)
