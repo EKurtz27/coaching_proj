@@ -81,115 +81,118 @@ app.layout = html.Div([
         ),
     ]),
     
-    dbc.Row([
-        dbc.Col(dcc.Dropdown(
-                options= [],
-                multi= False,
-                placeholder= 'Select a team to analyze',
-                id='team_select'
-            ), 
-            width={'size': 4, 'offset': 1}
-        ),
-        dbc.Col(dcc.Dropdown(
-                options= [],
-                multi= True,
-                placeholder= 'Select years to analyze for that team',
-                id='year_select'
+    dbc.Accordion([
+        dbc.AccordionItem([
+            dbc.Row([
+                dbc.Col(dcc.Dropdown(
+                        options= [],
+                        multi= False,
+                        placeholder= 'Select a team to analyze',
+                        id='team_select'
+                    ), 
+                    width={'size': 4, 'offset': 1}
+                ),
+                dbc.Col(dcc.Dropdown(
+                        options= [],
+                        multi= True,
+                        placeholder= 'Select years to analyze for that team',
+                        id='year_select'
+                    ),
+                    width={'size': 4, 'offset': 2}
+                )
+            ]),
+            
+            dbc.Row([dbc.Col(html.H6(""))]), # Helps spacing, gutters are another option
+
+            dbc.Row([ dbc.Col(html.H5('Selected Team - Year Combinations:'), 
+                        width={'size': 'auto', 'offset': 1})
+            ]),
+
+            dbc.Row([
+                dbc.Col(html.Pre(
+                    id="team_year_combo_display", style= {
+                    'border': 'thin lightgrey solid', 
+                    'overflowX': 'auto',
+                    'whiteSpace': 'pre-wrap'
+                    }),
+                    width={'size': 10, 'offset': 1}
+                )
+            ]),
+
+            dbc.Row([
+                dbc.Col(dbc.Button("Submit Team & Year Combination", id='team_year_combo_button', n_clicks=0, color="primary"),
+                        width={'size': 4, 'offset': 0}
+                ),
+                dbc.Col(dbc.Button("Update Parameters", id='update_button', n_clicks=0, color="primary"),
+                        width={'size': 3, 'offset': 0}
+                ),
+                dbc.Col(dbc.Button("Clear Parameters", id='clear_params', n_clicks=0),
+                        width={'size': 2, 'offset': 0}
+                ),
+            ], justify='center'
             ),
-            width={'size': 4, 'offset': 2}
-        )
-    ],
-    ),
-    
-    dbc.Row([dbc.Col(html.H6(""))]), # Helps spacing, gutters are another option
+            dcc.Store(id='team_year_combo_store', storage_type='session'),
+            
+            dbc.Row([
+                dbc.Col(
+                    html.P("Due to an unresolved Dash issue, please press 'Update Parameters' a second time after the first update \
+                    to fully update the graph", style={'fontStyle': 'italic'}),
+                    width={'size': 'auto', 'offset': 0}
+                )
+            ], justify='center'
+            ),
 
-    dbc.Row([ dbc.Col(html.H5('Selected Team - Year Combinations:'), 
-                width={'size': 'auto', 'offset': 1})
-    ],
-    ),
+            dbc.Row([dbc.Col(html.Div(id='legend-container'), width={'size': 'auto'}), 
+                ], justify='center'
+            ),
 
-    dbc.Row([
-        dbc.Col(html.Pre(
-            id="team_year_combo_display", style= {
-            'border': 'thin lightgrey solid', 
-            'overflowX': 'auto',
-            'whiteSpace': 'pre-wrap'
-            }),
-            width={'size': 10, 'offset': 1}
-        )
-    ],
-    ),
+            dbc.Row([
+                dbc.Col(html.H5('Coaching History'), width={'size': 'auto', 'offset': 1}),
+            ]),
+            
+            dbc.Row([
+                dbc.Col(html.P("Click on a coach's node to view their full coaching history"), 
+                        width={'size': 'auto', 'offset': 1}),
+            ]),
 
-    dbc.Row([
-        dbc.Col(dbc.Button("Submit Team & Year Combination", id='team_year_combo_button', n_clicks=0, color="primary"),
-                width={'size': 4, 'offset': 0}
-        ),
-        dbc.Col(dbc.Button("Update Parameters", id='update_button', n_clicks=0, color="primary"),
-                width={'size': 3, 'offset': 0}
-        ),
-        dbc.Col(dbc.Button("Clear Parameters", id='clear_params', n_clicks=0),
-                width={'size': 2, 'offset': 0}
-        ),
-    ], justify='center'
-    ),
-    dcc.Store(id='team_year_combo_store', storage_type='session'),
-    
-    dbc.Row([
-        dbc.Col(
-            html.P("Due to an unresolved Dash issue, please press 'Update Parameters' a second time after the first update \
-            to fully update the graph", style={'fontStyle': 'italic'}),
-            width={'size': 'auto', 'offset': 0}
-        )
-    ], justify='center'
-    ),
+            dbc.Row([
+                dbc.Col(html.H6(id='coach-name-click', style= {
+                        'border': 'thin lightgrey solid',
+                        'whiteSpace': 'normal',
+                        'padding': '10px'
+                    }), width={'size': 'auto', 'offset': 1}),
+            ]),
 
-    dbc.Row([dbc.Col(html.Div(id='legend-container'), width={'size': 'auto'}), 
-        ], justify='center'
-    ),
+            dbc.Row([
+                dbc.Col(html.Div(id='coach-teams-buttons', style={
+                    'columnCount': 2,
+                    'columnGap': '10px',
+                    'justifyContent': 'center'
+                }),
+                        width={'size': 12}),
+            ], justify='center'
+            ),
 
-    dbc.Row([
-        dbc.Col(html.H5('Coaching History'), width={'size': 'auto', 'offset': 1}),
-    ],),
-    
-    dbc.Row([
-        dbc.Col(html.P("Click on a coach's node to view their full coaching history"), 
-                width={'size': 'auto', 'offset': 1}),
-    ],),
+            dbc.Row([ 
+                    dbc.Col(html.H3(id='staff-header', style={
+                            'padding-inline': '20px'})
+                    )
+                ]),
 
-    dbc.Row([
-        dbc.Col(html.H6(id='coach-name-click', style= {
-                'border': 'thin lightgrey solid',
-                'whiteSpace': 'normal',
-                'padding': '10px'
-            }), width={'size': 'auto', 'offset': 1}),
-    ],),
+            cyto.Cytoscape(
+                id='sub_graph',
+                elements=[],  # Start empty
+                layout={'name': 'breadthfirst',
+                        },
 
-    dbc.Row([
-        dbc.Col(html.Div(id='coach-teams-buttons', style={
-            'columnCount': 2,
-            'columnGap': '10px',
-            'justifyContent': 'center'
-        }),
-                width={'size': 12}),
-    ], justify='center'
-    ),
-
-    dbc.Row([ 
-            dbc.Col(html.H3(id='staff-header', style={
-                    'padding-inline': '20px'})
+                stylesheet= subgraph_default_stylesheet,
+                style={'width': '100%', 'height': '600px'}
             )
-        ]),
-
-    cyto.Cytoscape(
-        id='sub_graph',
-        elements=[],  # Start empty
-        layout={'name': 'breadthfirst',
-                },
-
-        stylesheet= subgraph_default_stylesheet,
-        style={'width': '100%', 'height': '600px'}
-    )
+        ], title="Team & Year Selection"),
+        dbc.AccordionItem([], title="Pathing between Coaches")
+    ], flush=True)
 ])
+    
 
 @app.callback(
     Output('main_graph', 'elements'),
@@ -216,7 +219,7 @@ def generate_graph(contents, filename, full_graph_toggle, _json_clicks):
         teams_list (list): List of all unique teams found, given to the team selection dropdown
         years_list (list): List of all unique years found, given to the year selection dropdown
     """
-    ctx = callback_context
+    ctx = dash.callback_context
     if not ctx.triggered:
         return [], [], []
     trigger_id = get_id_of_triggered(ctx)
@@ -610,4 +613,4 @@ def handle_coach_button_click(n_clicks_list, ids): # Error, not updating on seco
     return dash.no_update, dash.no_update, dash.no_update, ""
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
