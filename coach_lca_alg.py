@@ -166,7 +166,6 @@ def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, head_coach: str,
         if total_dist < min_dist:
             min_hc_path = hc_to_ancestor_path
             min_c2_path = coach2_to_ancestor_path
-            direct_path = None
             min_dist = total_dist
             closest = ancestor
 
@@ -180,6 +179,7 @@ def find_lowest_common_ancestor(cleaned_graph: nx.MultiDiGraph, head_coach: str,
 
     if closest == None:
         closest = "None" # Done for formatting the csv
+
     return closest, min_dist, is_direct_path, direct_path, min_hc_path, min_c2_path
 
 def list_distance_scores(graph: nx.MultiDiGraph, team: str, year: int) -> list:
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # Convert the string list to a int list
     coach_jobs['Seasons at Position'] = coach_jobs['Seasons at Position'].apply(ast.literal_eval)
 
-    for year in range(2020, 2026):
+    for year in range(2020, 2021):
         teams_for_year_df = coach_jobs[coach_jobs['Seasons at Position'].apply(lambda x: year in x)]
         teams_for_year = teams_for_year_df["Team"].unique()
 
@@ -235,10 +235,25 @@ if __name__ == "__main__":
             # Build a dict: {coach2: mentor_combined_distance}
             row_dict = {}
             if team_dist_list:
-                for item in team_dist_list: # Fix in the morning, check chat
+                for item in team_dist_list:
                     coach2 = item["Queried Coach"]
                     coach2_pos = item["Queried Coach Position"]
                     lca_path_info = item["Pathing Info"]
+                    if lca_path_info[3] is not None:
+                        direct_path = lca_path_info[3]
+                        most_recent_year = year
+                        least_recent_year = max(direct_path[-1][2].get("years_of_connection"))
+                        years_between_mentorship = abs(most_recent_year - least_recent_year)
+
+                    elif lca_path_info[5] is not None:
+                        direct_path = lca_path_info[5]
+                        most_recent_year = year
+                        least_recent_year = max(direct_path[-1][2].get("years_of_connection"))
+                        years_between_mentorship = abs(most_recent_year - least_recent_year)
+
+                    else:
+                        years_between_mentorship = None
+
                     all_rows.append({
                         "Team": team,
                         "Year": year,                        
@@ -246,10 +261,11 @@ if __name__ == "__main__":
                         "Queried Coach Position": coach2_pos,
                         "Shared Mentor": lca_path_info[0],
                         "Combined Distance": lca_path_info[1],
+                        "Years Between Mentorship": years_between_mentorship,
                         "Direct Path": lca_path_info[2],
-                        "Queried Coach to HC Pathing": lca_path_info[3],
-                        "HC to Shared Mentor Pathing": lca_path_info[4],
-                        "Queried Coach to Shared Mentor Pathing": lca_path_info[5]
+                        # "Queried Coach to HC Pathing": lca_path_info[3],
+                        # "HC to Shared Mentor Pathing": lca_path_info[4],
+                        # "Queried Coach to Shared Mentor Pathing": lca_path_info[5]
                     })
             if not team_dist_list:
                 continue
