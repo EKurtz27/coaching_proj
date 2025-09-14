@@ -189,7 +189,11 @@ app.layout = html.Div([
                 style={'width': '100%', 'height': '600px'}
             )
         ], title="Team & Year Selection"),
-        dbc.AccordionItem([], title="Pathing between Coaches")
+        dbc.AccordionItem([
+            dbc.Row([
+                dbc.Col(html.H3("Select Two Coaches to find if they have a shared Mentor"))
+            ], justify='center')
+        ], title="Pathing between Coaches")
     ], flush=True)
 ])
     
