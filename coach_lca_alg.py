@@ -223,7 +223,7 @@ if __name__ == "__main__":
     # Convert the string list to a int list
     coach_jobs['Seasons at Position'] = coach_jobs['Seasons at Position'].apply(ast.literal_eval)
 
-    for year in range(2020, 2021):
+    for year in range(2020, 2026):
         teams_for_year_df = coach_jobs[coach_jobs['Seasons at Position'].apply(lambda x: year in x)]
         teams_for_year = teams_for_year_df["Team"].unique()
 
@@ -232,7 +232,7 @@ if __name__ == "__main__":
         for team in teams_for_year:
 
             team_dist_list = list_distance_scores(G, team, year)
-            # Build a dict: {coach2: mentor_combined_distance}
+
             row_dict = {}
             if team_dist_list:
                 for item in team_dist_list:
