@@ -64,7 +64,7 @@ def generate_color(index, total):
     hue = int(360 * index / total)
     return f"hsl({hue}, 70%, 50%)"
 
-def get_id_of_triggered(callback_context: dict) -> str:
+def get_id_of_triggered(callback_context) -> str:
     """
     Extracts and returns the component ID of the triggered input from a Dash callback context.
 
@@ -392,7 +392,7 @@ def find_encoded_levels_on_staff(main_elements: list, team: str, year: int) -> l
     encoded_pos_list = sorted(list(encoded_pos_list))
     return encoded_pos_list
 
-def create_bfs_graph_structure(cytoscape_elements: list, encoded_pos_list: list, team: str, year: int) -> list:
+def create_bfs_graph_structure(cytoscape_elements: list, encoded_pos_list: list, team: str, year: int) -> tuple[list, list]:
     """
     Creates a list of elements that allows the BFS layout style to correctly show a coaching staff 
     hierarchy tree in the subgraph.
