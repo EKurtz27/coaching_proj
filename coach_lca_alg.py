@@ -1,7 +1,7 @@
 import pickle
 import networkx as nx
 import pandas as pd
-from basic_graph_generation import *
+
 import ast
 
 # input_file_name = input("Please enter the path to the CSV file you wish to read: ").strip()
@@ -12,11 +12,8 @@ import ast
 
 # pickle.dump(G, open('data/full_coach_network.pickle', 'wb'))
 
-
-G = pickle.load(open('data/full_coach_network.pickle', 'rb'))
-
-test_subject = "Dan Lanning"
-test_year = 2024
+# test_subject = "Dan Lanning"
+# test_year = 2024
 
 
 def find_team_of_coach_year(graph: nx.MultiDiGraph, coach: str, year: int) -> str:
@@ -26,8 +23,9 @@ def find_team_of_coach_year(graph: nx.MultiDiGraph, coach: str, year: int) -> st
             years = edge.get('years_of_connection')
             if years != None and year in years: # If years exists, and year is in it
                 return edge.get("team_of_connection")
+    return "No team found"
         
-team = find_team_of_coach_year(G, "Dan Lanning", 2024)
+#team = find_team_of_coach_year(G, "Dan Lanning", 2024)
 #print(team)
 
 def keep_only_mentorship_true_edges(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
@@ -40,7 +38,7 @@ def keep_only_mentorship_true_edges(graph: nx.MultiDiGraph) -> nx.MultiDiGraph:
         graph.remove_edge(u, v, k)
     return graph
 
-def remove_future_edges(graph:nx.MultiDiGraph, last_valid_year: str) -> nx.MultiDiGraph: # Fix to collect before removal. Add keys
+def remove_future_edges(graph:nx.MultiDiGraph, last_valid_year: int) -> nx.MultiDiGraph: 
     edges_to_remove = []
     for u, v, k, edge_data in graph.edges(data=True, keys=True):
         years = edge_data.get("years_of_connection")
@@ -63,7 +61,7 @@ def is_promotion(connection_years: set, edge_data) -> bool:
     else:
         return False
 
-def remove_edges_of_last_job(graph: nx.MultiDiGraph, team: str,  coach: str, last_valid_year: int) -> nx.MultiDiGraph: # Fix to collect before removal. Add keys
+def remove_edges_of_last_job(graph: nx.MultiDiGraph, team: str,  coach: str, last_valid_year: int) -> tuple:
     hc_coach_connection_years = set()
     for u, v, k, edge_data in graph.edges(data=True, keys=True):
         if (1 in edge_data.get("encoded_connection") and
@@ -74,6 +72,8 @@ def remove_edges_of_last_job(graph: nx.MultiDiGraph, team: str,  coach: str, las
             # Solution? If lowest number in coach_connection_years is 1 less than a year in this edge, this represents a promotion
             hc_coach_edge_data = edge_data
             hc_coach_connection_years.update(edge_data.get("years_of_connection"))
+            year_job_started = min(hc_coach_connection_years)
+            # print(year_job_started)
 
     edges_to_remove = []
     for u, v, k, edge_data in graph.edges(data=True, keys= True):
@@ -83,19 +83,19 @@ def remove_edges_of_last_job(graph: nx.MultiDiGraph, team: str,  coach: str, las
             edges_to_remove.append((u, v, k))
     for u, v, k in edges_to_remove:
         graph.remove_edge(u, v, k)
-    return graph
+    return graph, year_job_started
 
 
-def clean_graph(graph: nx.MultiDiGraph, team: str, coach: str, last_valid_year: int) -> nx.MultiDiGraph:
+def clean_graph(graph: nx.MultiDiGraph, team: str, coach: str, last_valid_year: int) -> tuple:
     # print(G.number_of_edges())
     new_graph = graph.copy()
     keep_only_mentorship_true_edges(new_graph)
     remove_future_edges(new_graph, last_valid_year)
-    remove_edges_of_last_job(new_graph, team, coach, last_valid_year)
+    new_graph, year_job_started = remove_edges_of_last_job(new_graph, team, coach, last_valid_year)
     # print(G.number_of_edges())
-    return new_graph
+    return new_graph, year_job_started
 
-def chronologic_sentsitive_bfs_shortest_path_length(graph: nx.MultiDiGraph, start_node: str, end_node: str) -> int:
+def chronologic_sentsitive_bfs_shortest_path_length(graph: nx.MultiDiGraph, start_node: str, end_node: str) -> list:
     explored = set()
     queue = [[(start_node, None, None)]] # None as the previous edge
     distance_dict = {}
@@ -207,16 +207,20 @@ def list_distance_scores(graph: nx.MultiDiGraph, team: str, year: int) -> list:
 
     for coach2, coach2_position in relevant_coaches:
 
-        indiv_coach_graph = clean_graph(graph, team, coach2, year)
+        indiv_coach_graph, year_job_started = clean_graph(graph, team, coach2, year)
 
         distance_list.append({
             "Queried Coach": coach2,
             "Queried Coach Position": coach2_position,
+            "Year Current Job Started": year_job_started,
             "Pathing Info": find_lowest_common_ancestor(indiv_coach_graph, head_coach, coach2)
             }) 
+
     return distance_list
 
 if __name__ == "__main__":
+    G = pickle.load(open('data/full_coach_network.pickle', 'rb'))
+    
     with open("data/clean_sorted_coach_jobs.csv", "r") as f:
         coach_jobs = pd.read_csv(f)
 
@@ -241,14 +245,14 @@ if __name__ == "__main__":
                     lca_path_info = item["Pathing Info"]
                     if lca_path_info[3] is not None:
                         direct_path = lca_path_info[3]
-                        most_recent_year = year
+                        most_recent_year = item['Year Current Job Started']
                         least_recent_year = max(direct_path[-1][2].get("years_of_connection"))
                         years_between_mentorship = abs(most_recent_year - least_recent_year)
 
                     elif lca_path_info[5] is not None:
-                        direct_path = lca_path_info[5]
-                        most_recent_year = year
-                        least_recent_year = max(direct_path[-1][2].get("years_of_connection"))
+                        path_to_mentor = lca_path_info[5]
+                        most_recent_year = item['Year Current Job Started']
+                        least_recent_year = max(path_to_mentor[-1][2].get("years_of_connection"))
                         years_between_mentorship = abs(most_recent_year - least_recent_year)
 
                     else:
@@ -262,6 +266,7 @@ if __name__ == "__main__":
                         "Shared Mentor": lca_path_info[0],
                         "Combined Distance": lca_path_info[1],
                         "Years Between Mentorship": years_between_mentorship,
+                        "Years Working Current Position": (year - item['Year Current Job Started']),
                         "Direct Path": lca_path_info[2],
                         # "Queried Coach to HC Pathing": lca_path_info[3],
                         # "HC to Shared Mentor Pathing": lca_path_info[4],
