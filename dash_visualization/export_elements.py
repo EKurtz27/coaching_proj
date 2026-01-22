@@ -35,7 +35,7 @@ def export_elements(G, full_elements):
         
         # Only include edges where visualization_tracker == 1   
         if full_elements == False:    
-            if data.get('visualization_tracker', 0) == 1:
+            if data.get('mentor_status', 0) != "Not a Mentor":
                 edge_data = {
                     'id': f'edge-{idx}',
                     'description': f'{source} -> {target}',
@@ -52,5 +52,5 @@ def export_elements(G, full_elements):
 elements = export_elements(G, full_elements=False)
 
 # Be sure to change the file name! Recommended to swap between full_elements_dump and visualization_elements_dump
-with open('data/visualization_elements_dump.json', 'w', encoding='utf-8') as f:
+with open('data/mentor_only_elements_dump.json', 'w', encoding='utf-8') as f:
     f.write(json.dumps(elements, ensure_ascii=False, indent=2))

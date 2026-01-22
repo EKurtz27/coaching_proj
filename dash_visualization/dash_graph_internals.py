@@ -138,7 +138,7 @@ def parse_json_file():
     """
     import json
 
-    with open('data/visualization_elements_dump.json') as f:
+    with open('data/mentor_only_elements_dump.json') as f:
         elements = json.load(f)
         teams = set()
         years = set()
