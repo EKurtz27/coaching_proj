@@ -91,12 +91,12 @@ class CoachNetworkQueries:
             row = result.single()
             return row["path_data"] if row else None
     
-    def find_all_paths(self, coach1: str, coach2: str, max_depth: int = 4, limit: int = 5) -> List[Dict]:
+    def find_all_paths(self, coach1: str, coach2: str, limit: int = 10) -> List[Dict]:
         """Find multiple connection paths between coaches"""
         with self.driver.session() as session:
-            result = session.run(
-                """
-                MATCH path = (start:Coach {name: $coach1})-[:CONNECTED_TO*1..$max_depth]-(end:Coach {name: $coach2})
+            result = session.run( ###Replace X with a number, find a way to convert this into difficulty (avg length? number of paths doesn't work, too many paths)
+                """ 
+                MATCH path = SHORTEST X (start:Coach {name: $coach1})-[:CONNECTED_TO*1..10]-(end:Coach {name: $coach2})
                 WITH nodes(path) as nodes, relationships(path) as rels, length(path) as path_length
                 RETURN {
                     length: path_length,
@@ -114,7 +114,6 @@ class CoachNetworkQueries:
                 """,
                 coach1=coach1,
                 coach2=coach2,
-                max_depth=max_depth,
                 limit=limit
             )
             return [row["path_data"] for row in result]

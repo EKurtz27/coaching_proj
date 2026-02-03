@@ -77,16 +77,12 @@ def full_data_analysis(start_year, end_year_noninc):
             if pd.notna(row["UnexpectedResult"]):
                 homeTeam = row['HomeTeam']
                 awayTeam = row['AwayTeam']
-                if row["UnexpectedResult"] == 0:
-                    try:
-                        unexpectedWins[homeTeam] += 1
-                    except KeyError:
-                        unexpectedWins[homeTeam] = 1 
-                else: 
-                    try:
-                        unexpectedWins[awayTeam] += 1
-                    except KeyError:
-                        unexpectedWins[awayTeam] = 1 
+                if row["UnexpectedResult"] == 0: # Home team won
+                    unexpectedWins[homeTeam] = unexpectedWins.get(homeTeam, 0) + 1
+                    unexpectedWins[awayTeam] = unexpectedWins.get(awayTeam, 0) - 1
+                else: # Away team won
+                    unexpectedWins[awayTeam] = unexpectedWins.get(awayTeam, 0) + 1
+                    unexpectedWins[homeTeam] = unexpectedWins.get(homeTeam, 0) - 1 
         # Build scatter plot data
         for team in unexpectedWins.keys():
             team_cohesion_row = cohesion_stats[cohesion_stats['Team'] == team]

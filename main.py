@@ -207,40 +207,52 @@ async def get_coach_details(coach_name: str):
 @app.get("/api/paths/shortest")
 async def find_shortest_path(coach1: str, coach2: str):
     """
-    Find the shortest path between two coaches (like "degrees of separation")
-    """
-    logger.info(f"🔍 Received request: coach1='{coach1}', coach2='{coach2}'")
+    Find the shortest path between two coaches
     
+    Query Parameters:
+        - coach1 (str, required): Starting coach name
+        - coach2 (str, required): Ending coach name
+        - max_depth (int, optional): Maximum hops to search (default: 5)
+    
+    Returns:
+        {
+            "path": [
+                {"name": "Coach A"},
+                {"name": "Coach B"},
+                {"name": "Coach C"}
+            ],
+            "length": 3,
+            "connections": [
+                {
+                    "from": "Coach A",
+                    "to": "Coach B",
+                    "description": "Worked together at Team X"
+                }
+            ]
+        }
+    """
     if not coach1 or not coach2 or coach1.strip() == "" or coach2.strip() == "":
-        logger.warning("❌ Empty coach names")
         return JSONResponse(
             status_code=400,
             content={"error": "Both coach1 and coach2 are required"}
         )
     
     if coach1.lower() == coach2.lower():
-        logger.warning("❌ Same coach names")
         return JSONResponse(
             status_code=400,
             content={"error": "coach1 and coach2 must be different"}
         )
     
-    logger.info(f"📞 Calling app_queries.find_shortest_path()")
     try:
         path = app_queries.find_shortest_path(coach1, coach2)
-        logger.info(f"✅ Got result: {path}")
-        
         if not path:
-            logger.warning(f"❌ No path found")
             return JSONResponse(
                 status_code=404,
                 content={"error": f"No path found between '{coach1}' and '{coach2}' within 5 hops"}
             )
         return path
     except Exception as e:
-        logger.error(f"❌ Shortest path error: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.error(f"Shortest path error: {e}")
         return JSONResponse(
             status_code=500,
             content={"error": "Pathfinding failed"}
@@ -248,7 +260,7 @@ async def find_shortest_path(coach1: str, coach2: str):
 
 
 @app.get("/api/paths/all")
-async def find_all_paths(coach1: str, coach2: str, max_depth: int = 4, limit: int = 5):
+async def find_all_paths(coach1: str, coach2: str, limit: int = 5):
     """
     Find multiple paths between two coaches
     
@@ -282,10 +294,10 @@ async def find_all_paths(coach1: str, coach2: str, max_depth: int = 4, limit: in
             content={"error": "coach1 and coach2 must be different"}
         )
     
-    if max_depth < 1:
-        max_depth = 4
-    if limit < 1 or limit > 20:
-        limit = 5
+    # if max_depth < 1:
+    #     max_depth = 4
+    # if limit < 1 or limit > 20:
+    #     limit = 5
     
     try:
         paths = app_queries.find_all_paths(coach1, coach2, max_depth, limit)
